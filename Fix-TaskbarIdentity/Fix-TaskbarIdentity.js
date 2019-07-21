@@ -19,7 +19,7 @@ Win32.TypeMap['guid'] = [16,
     Win32.GUID.read, 
     function (addr, newValue) { Memory.copy(addr, Win32.GUID.alloc(newValue), 16); }
 ];
-
+ 
 
 // API from windows headers
 var PROPKEY = {

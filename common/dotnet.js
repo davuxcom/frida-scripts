@@ -1,15 +1,15 @@
 // DotNet CLR API
 (function () {
     "use strict";
-	
-	var Struct = Win32.Struct;
-	
+
     var _CLR = null;
     Object.defineProperty(global, "CLR", { get: function () {
         if (_CLR == null) { _CLR = new CreateCLR(); }
         return _CLR;
     }});
     function CreateCLR() {
+        var Struct = Win32.Struct;
+
         var BridgeExports = {};
 		var BridgePtr = null;
         var assembly_load_counter = 0;

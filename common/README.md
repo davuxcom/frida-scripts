@@ -1,6 +1,36 @@
 
 # Common scripts
 
+## DotNet.js
+DotNet.js uses the DotNetBridge.dll COM component registered on the machine to add .net types to Frida scripts.
+
+### Using .net
+
+```js
+CLR.Init();
+CLR.AddNamespace("System");
+
+// and then call any API like so:
+System.Threading.Thread.Sleep(1000);
+System.Diagnostics.Trace.WriteLine("hello");
+```
+
+#### Enable trace listener thread
+Connect `Trace.WriteLine()` to `console.log()` for debugging purposes:
+```js
+CLR.EnableTraceListener();
+```
+
+### Event handlers
+
+```js
+var eventToken = System.AppDomain.CurrentDomain.AssemblyLoad += new System.AssemblyLoadEventHandler(function (s, e) { asmLoaded = true;});
+```
+
+### See more examples
+
+#### [Test-DotNetBridge.js](../Test-DotNetBridge/Test-DotNetBridge.js)
+
 ## Win32.js
 
 ### Win32.GUID
@@ -73,6 +103,7 @@ var IFileDialog = new COM.Interface(COM.IUnknown, {
 	GetResult: [17, ['pointer']],
 }, "42f85136-db7e-439c-85f1-e4075d135fc8");
 var modalWindow = COM.CreateInstance(CLSID_FileOpenDialog, COM.ClassContext.InProc, IFileDialog);
+```
 
 ### COM constants
 

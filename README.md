@@ -20,6 +20,14 @@ Modern IFileDialog folder selection dialog
 
 ### [See README for all common scripts](./common/README.md)
 
+### DotNet.js
+
+Call .net APIs directly from javascript.
+
+```js
+System.IO.File.WriteAllText(path, "log data");
+```
+
 ### Win32.js
 Win32.js has features for working with `GUID`, `HSTRING`, `BSTR`, C-style structs as well as calling COM and WinRT APIs.
 

@@ -19,20 +19,20 @@
     // Microsoft APIs use stdcall on x86.
     function GetAbi() { return Process.arch == 'x64' ? 'win64' : 'stdcall'; }
 
+	var TypeMap = {
+		'pointer': [Process.pointerSize, Memory.readPointer, Memory.writePointer],
+		'char': [1, Memory.readS8, Memory.writeS8], 'uchar': [1, Memory.readU8, Memory.writeU8],
+		'int8': [1, Memory.readS8, Memory.writeS8], 'uint8': [1, Memory.readU8, Memory.writeU8],
+		'int16': [2, Memory.readS16, Memory.writeS16], 'uint16': [2, Memory.readU16, Memory.writeU16],
+		'int': [4, Memory.readS32, Memory.writeS32], 'uint': [4, Memory.readU32, Memory.writeU32],
+		'int32': [4, Memory.readS32, Memory.writeS32], 'uint32': [4, Memory.readU32, Memory.writeU32],
+		'long': [4, Memory.readS32, Memory.writeS32], 'ulong': [4, Memory.readU32, Memory.writeU32],
+		'float': [4, Memory.readFloat, Memory.writeFloat], 'double': [8, Memory.readDouble, Memory.writeDouble],
+		'int64': [8, Memory.readS64, Memory.writeS64], 'uint64': [8, Memory.readU64, Memory.writeU64],
+	};
+	
 	// Given a set of definitions, build a javascript object with getters/setters around base_ptr.
     var Struct = function (structInfo) {
-        var TypeMap = {
-            'pointer': [Process.pointerSize, Memory.readPointer, Memory.writePointer],
-            'char': [1, Memory.readS8, Memory.writeS8], 'uchar': [1, Memory.readU8, Memory.writeU8],
-            'int8': [1, Memory.readS8, Memory.writeS8], 'uint8': [1, Memory.readU8, Memory.writeU8],
-            'int16': [2, Memory.readS16, Memory.writeS16], 'uint16': [2, Memory.readU16, Memory.writeU16],
-            'int': [4, Memory.readS32, Memory.writeS32], 'uint': [4, Memory.readU32, Memory.writeU32],
-            'int32': [4, Memory.readS32, Memory.writeS32], 'uint32': [4, Memory.readU32, Memory.writeU32],
-            'long': [4, Memory.readS32, Memory.writeS32], 'ulong': [4, Memory.readU32, Memory.writeU32],
-            'float': [4, Memory.readFloat, Memory.writeFloat], 'double': [8, Memory.readDouble, Memory.writeDouble],
-            'int64': [8, Memory.readS64, Memory.writeS64], 'uint64': [8, Memory.readU64, Memory.writeU64],
-        };
-
         function LookupType(stringType) {
             for (var type in TypeMap) { if (stringType == type) { return TypeMap[type]; } }
             throw Error("Didn't find " + JSON.stringify(stringType) + " in TypeMap");
@@ -118,6 +118,8 @@
                 }
             }
         }
+		
+		this.TypeMap = TypeMap;
 		this.Abi = GetAbi();
 		this.Struct = Struct;
     }

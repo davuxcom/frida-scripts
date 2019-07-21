@@ -1,9 +1,7 @@
 # Frida scripts for Windows application hooking
 This repository contains scripts for working with Frida on Windows.  The objective of Frida scripts is to inject into a third-party target process and modify behavior.
 
-## Scripts
-
-### Replace calls to SHBrowseForFolder with IFileDialog
+## Replace calls to SHBrowseForFolder with IFileDialog
 Replace the legacy folder dialog with the new dialog, enabling path entry.
 
 ![Legacy SHBrowseForFolder folder selection dialog](./Fix-SHBrowseForFolder/gfx/SHBrowseForFolder.png)
@@ -15,6 +13,13 @@ Legacy SHBrowseForFolder folder selection dialog
 Modern IFileDialog folder selection dialog
 
 ### [View and install Fix-SHBrowseForFolder script](./Fix-SHBrowseForFolder/README.md)
+
+## Assign a unique taskbar identity
+Group a specific window differently on the taskbar:
+
+![Taskbar showing two notepad buttons](./Fix-TaskbarIdentity/gfx/taskbar.png)
+
+### [View and install Fix-TaskbarIdentity script](./Fix-TaskbarIdentity/README.md)
 
 ## Common scripts
 

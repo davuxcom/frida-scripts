@@ -1,3 +1,26 @@
+var windowXaml = '' + 
+'<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"' + 
+'        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"' + 
+'        Title="MainWindow"' + 
+'        Height="300"' + 
+'        Width="600">' + 
+'    <Grid>' + 
+'        <Grid.RowDefinitions>' + 
+'            <RowDefinition Height="Auto" />' + 
+'            <RowDefinition Height="*" />' + 
+'        </Grid.RowDefinitions>' + 
+'        ' + 
+'        <TextBox Name="SearchBox" />' + 
+'        <TextBox Name="Results"' + 
+'            FontFamily="Courier New"' + 
+'            Grid.Row="1"' + 
+'            TextWrapping="Wrap"' + 
+'            AcceptsReturn="True"' + 
+'            HorizontalScrollBarVisibility="Disabled"' + 
+'            VerticalScrollBarVisibility="Auto" />' + 
+'    </Grid>' + 
+'</Window>' + 
+''; 
 
 (function () {
     "use strict";
@@ -919,86 +942,78 @@
 		    });
 		}
     }
-})();
-// OBJECTIVE: 
-// Wait 5 seconds
-// Use .net to get an hwnd for our process
-// Set the window property store AppId on that hwnd
-// Taskbar will recognize the change and show a unique button for this window
-
-
-// Add some custom types. [size, readFunc, writeFunc]
-Win32.TypeMap['pwstr'] = [Process.pointerSize, 
-    function(addr) { return Memory.readUtf16String(Memory.readPointer(addr)); },     
-    function(addr, newValue) { 
-        var stringRef = Memory.allocUtf16String(newValue);
-        Memory.writePointer(addr, stringRef);
-        return stringRef; // tied to object lifetime.
-    }
-];
-Win32.TypeMap['guid'] = [16, 
-    Win32.GUID.read, 
-    function (addr, newValue) { Memory.copy(addr, Win32.GUID.alloc(newValue), 16); }
-];
- 
-
-// API from windows headers
-var PROPKEY = {
-    fmtid: 'guid',
-    pid: 'ulong'
-}
-
-var PKEY_AppUserModel_Id = new Win32.Struct(PROPKEY);
-PKEY_AppUserModel_Id.fmtid = "9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3";
-PKEY_AppUserModel_Id.pid = 5;
-
-var Shell32 = {
-    SHGetPropertyStoreForWindow: new NativeFunction(Module.findExportByName("shell32.dll", "SHGetPropertyStoreForWindow"), 'uint', ['int','pointer', 'pointer']),
-};
-
-var VT_LPWSTR = 31;
-var PROPVARIANT = {
-    vt: 'uint16',
-    reserved1: 'uchar',
-    reserved2: 'uchar',
-    reserved3: 'ulong',
-    union: {
-        intVal: 'int',
-        pwszVal: 'pwstr',
-    },
-    extra: 'ulong'
-};
-
-var IPropertyStore = new COM.Interface(COM.IUnknown, {
-    // HRESULT SetValue([in] REFPROPERTYKEY key, [in] REFPROPVARIANT propvar);
-    SetValue: [3, ['pointer', 'pointer']],
-}, "886d8eeb-8cf2-4446-8d02-cdba1dbdcf99");
-
-
-function SetAppIdForWindow(hwnd, appId) {
-    var propStore = new COM.Pointer(IPropertyStore);
-    COM.ThrowIfFailed(Shell32.SHGetPropertyStoreForWindow(hwnd, IPropertyStore.IID, propStore.GetAddressOf()));
-
-    var propVar = new Win32.Struct(PROPVARIANT);
-    propVar.vt = VT_LPWSTR;
-    propVar.pwszVal = appId;
-    console.log(propVar.pwszVal);
-    console.log(propVar.intVal);
-
-    COM.ThrowIfFailed(propStore.SetValue(PKEY_AppUserModel_Id.Get(), propVar.Get()));
-}
-
-CLR.Init();
+})();CLR.Init();
 CLR.AddNamespace("System");
+System.Reflection.Assembly.LoadWithPartialName("PresentationFramework");
 
-setTimeout(function() {
-    function CheckForMainWindow() {
-        var hwnd = System.Diagnostics.Process.GetCurrentProcess().MainWindowHandle.value;
-        if (hwnd > 0) {
-            SetAppIdForWindow(hwnd, "Notepad.2");
-        } else {
-            setTimeout(CheckForMainWindow, 1);
-        }
+function dump(addr) {
+    return hexdump(addr, {
+        offset: 0,
+        length: 256,
+        header: true,
+        ansi: false
+    });
+}
+
+var query_count = 0;
+
+function SearchAsync(query) {
+    
+    if (query.length < 8)
+    {
+        console.log('[!] Query too short: ' + query);
+        return;
     }
-    CheckForMainWindow();
-},5000);
+    
+    query_count++;
+    var my_query = query_count;
+	var ranges = Process.enumerateRangesSync({protection: 'r--', coalesce: true});
+    var range;
+    function processNext(){
+        range = ranges.pop();
+        if(!range){
+            console.log('[_] Done');
+            return;
+        }
+        // due to the lack of blacklisting in Frida, there will be 
+        // always an extra match of the given pattern (if found) because
+        // the search is done also in the memory owned by Frida.
+        Memory.scan(range.base, range.size, query, {
+            onMatch: function(address, size){
+                    console.log('[+] Pattern found at: ' + address.toString());
+                    
+                    if (my_query != query_count) 
+                    {
+                        console.log('[_] Done (obsolete)');
+                        return "stop";
+                    }
+                }, 
+            onError: function(reason){
+                    console.log('[!] There was an error scanning memory');
+                }, 
+            onComplete: function(){
+                    processNext();
+                }
+            });
+    }
+    processNext();
+}
+
+var uiThread = new System.Threading.Thread(new System.Threading.ThreadStart(function() {
+    // Parse XAML compiled into a variable.
+    var window = System.Windows.Markup.XamlReader.Parse(windowXaml);
+    var Results = window.FindName("Results");
+    var SearchBox = window.FindName("SearchBox");
+    
+    
+    Results.Text = dump(Module.findExportByName("shell32.dll", "SHGetPropertyStoreForWindow"));
+
+    SearchBox.TextChanged += new System.Windows.Controls.TextChangedEventHandler(function (s,e) {
+        console.log("Text is: " + SearchBox.Text);
+        
+        SearchAsync(SearchBox.Text);
+    });
+    window.ShowDialog();
+}));
+uiThread.SetApartmentState(System.Threading.ApartmentState.STA);
+uiThread.Start();

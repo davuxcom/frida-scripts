@@ -1,3 +1,4 @@
+
 (function () {
     "use strict";
     // SHIM: duktape
@@ -117,6 +118,8 @@
                 }
             }
         }
+		this.Abi = GetAbi();
+		this.Struct = Struct;
     }
 
     var _WinRT = null;

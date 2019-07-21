@@ -1,3 +1,4 @@
+
 (function () {
     "use strict";
     // SHIM: duktape
@@ -117,6 +118,8 @@
                 }
             }
         }
+		this.Abi = GetAbi();
+		this.Struct = Struct;
     }
 
     var _WinRT = null;
@@ -482,89 +485,31 @@
         }
     }
 })();
+console.log("Starting");
 
-
-var Struct = function (structInfo, base_ptr_in) {
-	var TypeMap = {
-		'pointer': [Process.pointerSize, Memory.readPointer, Memory.writePointer],
-		'char': [1, Memory.readS8, Memory.writeS8], 'uchar': [1, Memory.readU8, Memory.writeU8],
-		'int8': [1, Memory.readS8, Memory.writeS8], 'uint8': [1, Memory.readU8, Memory.writeU8],
-		'int16': [2, Memory.readS16, Memory.writeS16], 'uint16': [2, Memory.readU16, Memory.writeU16],
-		'int': [4, Memory.readS32, Memory.writeS32], 'uint': [4, Memory.readU32, Memory.writeU32],
-		'int32': [4, Memory.readS32, Memory.writeS32], 'uint32': [4, Memory.readU32, Memory.writeU32],
-		'long': [4, Memory.readS32, Memory.writeS32], 'ulong': [4, Memory.readU32, Memory.writeU32],
-		'float': [4, Memory.readFloat, Memory.writeFloat], 'double': [8, Memory.readDouble, Memory.writeDouble],
-		'int64': [8, Memory.readS64, Memory.writeS64], 'uint64': [8, Memory.readU64, Memory.writeU64],
-	};
-
-	function LookupType(stringType) {
-		for (var type in TypeMap) { if (stringType == type) { return TypeMap[type]; } }
-		throw Error("Didn't find " + JSON.stringify(stringType) + " in TypeMap");
-	}
-
-	var setter_result_cache = {};
-	function CreateGetterSetter(self, name, type, offset) {
-		Object.defineProperty(self, name, {
-			get: function () { return LookupType(type)[1](base_ptr.add(offset)); },
-			set: function (newValue) { setter_result_cache[name] = LookupType(type)[2](base_ptr.add(offset), newValue); }
-		});
-	};
-
-	function SizeOfType(stringType) { return LookupType(stringType)[0]; }
-
-	var base_ptr_size = 0;
-	for (var member in structInfo) {
-		var member_size = 0;
-		if (member == "union") {
-			var union = structInfo[member];
-			for (var union_member in union) {
-				var union_member_type = union[union_member];
-				var union_member_size = SizeOfType(union_member_type);
-				if (member_size < union_member_size) { member_size = union_member_size; }
-				CreateGetterSetter(this, union_member, union_member_type, base_ptr_size);
-			}
-		} else {
-			var member_size = SizeOfType(structInfo[member]);
-			CreateGetterSetter(this, member, structInfo[member], base_ptr_size);
-		}
-		base_ptr_size += member_size;
-	}
-	var base_ptr = base_ptr_in;
-	
-	if (base_ptr == NULL)
-	{
-		base_ptr = Memory.alloc(base_ptr_size);
-	}
-	this.Get = function () { return base_ptr; }
-	Object.defineProperty(this, "Size", { get: function () { return base_ptr_size; } });
-}
-
-function GetAbi() { return Process.arch == 'x64' ? 'win64' : 'stdcall'; }
-
+// Define API's from windows headers.
 var CLSID_FileOpenDialog = Win32.GUID.alloc("DC1C5A9C-E88A-4dde-A5A1-60F82A20AEF7");
-
 var FOS_PICKFOLDERS	= 0x20;
 var IFileDialog = new COM.Interface(COM.IUnknown, {
 	Show: [0, ['uint']],
 	SetOptions: [6, ['uint']],
 	GetResult: [17, ['pointer']],
 }, "42f85136-db7e-439c-85f1-e4075d135fc8");
-
 var IShellItem = new COM.Interface(COM.IUnknown, {
 }, "43826d1e-e718-42ee-bc55-a1e261c37bfe");
-
 var SHBrowseForFolderPtr = Module.findExportByName('shell32.dll', 'SHBrowseForFolderW');
 var SHBrowseForFolder = new NativeFunction(SHBrowseForFolderPtr, 'pointer', ['pointer']);
-
 var SHGetIDListFromObject = new NativeFunction(Module.findExportByName('shell32.dll', 'SHGetIDListFromObject'), 'uint', ['pointer','pointer']);
+var BIF_EDITBOX = (0x00000010);
+var BIF_NEWDIALOGSTYLE = (0x00000040);
+var BIF_RETURNONLYFSDIRS = (0x00000001);
 
+
+// Intercept and replace SHBrowseForFolderW
 Interceptor.replace(SHBrowseForFolderPtr, new NativeCallback(function (browseinfoPtr) {
-    console.log("SHBrowseForFolder Entry");
+    console.log("SHBrowseForFolderW Entry");
 
-	var BIF_EDITBOX = (0x00000010);
-	var BIF_NEWDIALOGSTYLE = (0x00000040);
-	var BIF_RETURNONLYFSDIRS = (0x00000001);
-	var browseinfo = new Struct({ // BROWSEINFO
+	var browseinfo = new Win32.Struct({ // BROWSEINFO
 			'hwndOwner':'int',
 			'pidlRoot':'pointer',
 			'pszDisplayName':'pointer',
@@ -574,23 +519,24 @@ Interceptor.replace(SHBrowseForFolderPtr, new NativeCallback(function (browseinf
 			'lParam':'long',
 			'iImage':'int',
 		}, browseinfoPtr);
-	console.log("Flags: 0x" + browseinfo.ulFlags.toString(16));
+	console.log("SHBrowseForFolderW ulFlags: 0x" + browseinfo.ulFlags.toString(16));
 
+	// Per the docs, COM should already be initialized but this wasn't the case when testing against a real app.
 	COM.Initialize(COM.ApartmentType.STA);
 	
+	// Create and show the replacement dialog
 	var modalWindow = COM.CreateInstance(CLSID_FileOpenDialog, COM.ClassContext.InProc, IFileDialog);
 	modalWindow.SetOptions(FOS_PICKFOLDERS);
 	modalWindow.Show(browseinfo.hwndOwner);
-
 	var shellItem = new COM.Pointer(IShellItem);
 	COM.ThrowIfFailed(modalWindow.GetResult(shellItem.GetAddressOf()));
 
+	// Convert IShellItem result to an idlist to return to SHBrowseForFolderW.
 	var pidl = Memory.alloc(Process.pointerSize);
 	COM.ThrowIfFailed(SHGetIDListFromObject(shellItem.Get(), pidl));
 	
-	console.log("SHBrowseForFolder Exit " + pidl);
-	
+	console.log("SHBrowseForFolderW Exit pidl=" + pidl);
     return Memory.readPointer(pidl);
-}, 'pointer', ['pointer'], GetAbi()));
+}, 'pointer', ['pointer'], Win32.Abi));
 
 console.log("Ready");

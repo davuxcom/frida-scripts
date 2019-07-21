@@ -1,8 +1,49 @@
 # Frida scripts for Windows application hooking
 This repository contains scripts for working with Frida on Windows.  The objective of Frida scripts is to inject into a third-party target process and modify behavior.
 
+[Win32.js](./common/win32.js) and [DotNet.js](./common/dotnet.js) add powerful base APIs for interacting with COM, WinRT and .NET APIs directly from javascript Frida scripts.
+
+- Check out and install [Frida](https://www.frida.re/docs/home/), a dynamic code instrumentation toolkit.
+- Everything here is built on top of the [Frida JavaScript API](https://www.frida.re/docs/javascript-api), which provides access to native functions and memory manipulation.
+
+### Quick walkthrough
+
+The workflow is this:
+- A target app is running on the machine
+- A crafted javascript file (the script) is attached and injected into the target
+- The script has a custom script to manipulate memory in the target using Frida APIs, as well as higher level APIs like win32.js and dotnet.js to call more complex APIs (e.g. opening a named pipe or streaming data to a log file)
+- The target app and script both operate concurrently from the process space of the target
+
+#### Example: attach
+We attach to a running instance of notepad by looking in task manager for the `PID` (say `1447` in this case):
+
+```
+frida -p 1447 -l myscript.js
+```
+
+Frida will then start and attach to the target:
+
+```
+     ____
+    / _  |   Frida 11.0.12 - A world-class dynamic instrumentation toolkit
+   | (_| |
+    > _  |   Commands:
+   /_/ |_|       help      -> Displays the help system
+   . . . .       object?   -> Display information about 'object'
+   . . . .       exit/quit -> Exit
+   . . . .
+   . . . .   More info at http://www.frida.re/docs/home/
+Attaching...
+
+[Local::PID::1447]->
+
+```
+
+At this point as long as no errors are present, the script is attached and ready to go. Scripts in this repository usualy print `Begin` or `Ready` to signal the script is actually loaded. If frida quits, there may be a parse error in the script.
+
+
 ## Replace calls to SHBrowseForFolder with IFileDialog
-Replace the legacy folder dialog with the new dialog, enabling path entry.
+[Fix-SHBrowseForFolder](./Fix-SHBrowseForFolder) replaces the legacy folder dialog with the modern new dialog, enabling path entry.
 
 ![Legacy SHBrowseForFolder folder selection dialog](./Fix-SHBrowseForFolder/gfx/SHBrowseForFolder.png)
 
@@ -12,18 +53,18 @@ Legacy SHBrowseForFolder folder selection dialog
 
 Modern IFileDialog folder selection dialog
 
-### [View and install Fix-SHBrowseForFolder script](./Fix-SHBrowseForFolder/README.md)
+### [View and install Fix-SHBrowseForFolder script](./Fix-SHBrowseForFolder)
 
 ## Assign a unique taskbar identity
 Group a specific window differently on the taskbar:
 
 ![Taskbar showing two notepad buttons](./Fix-TaskbarIdentity/gfx/taskbar.png)
 
-### [View and install Fix-TaskbarIdentity script](./Fix-TaskbarIdentity/README.md)
+### [View and install Fix-TaskbarIdentity script](./Fix-TaskbarIdentity)
 
 ## Common scripts
 
-### [See README for all common scripts](./common/README.md)
+### [See README for all common scripts](./common)
 
 ### DotNet.js
 

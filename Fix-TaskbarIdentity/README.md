@@ -1,4 +1,4 @@
-# Assign a unique taskbar identity to an app
+# Script: Assign a unique taskbar identity
 
 This script locates gets the 'main' hwnd for the current (injected) process, and sets a unique AppId on that window, ensuring the taskbar will show it as a unique button.
 

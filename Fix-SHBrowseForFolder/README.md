@@ -1,15 +1,11 @@
 
-# Replace calls to SHBrowseForFolder with IFileDialog
+# Script: Replace SHBrowseForFolder with IFileDialog
 
-Replace the legacy folder dialog with the new dialog, enabling path entry.
+Replace the legacy folder dialog with the new IFileDialog dialog, enabling path entry.
 
-![Legacy SHBrowseForFolder folder selection dialog](./gfx/SHBrowseForFolder.png)
+![Legacy SHBrowseForFolder IFileDialog selection dialog](./gfx/dialogs.png)
 
-Legacy SHBrowseForFolder folder selection dialog 
-
-![Modern IFileDialog folder selection dialog](./gfx/IFileDialog.png)
-
-Modern IFileDialog folder selection dialog
+(Left) Legacy SHBrowseForFolder dialog, (Right) modern IFileDialog dialog.
 
 ## How to use this script
 
@@ -22,8 +18,8 @@ Modern IFileDialog folder selection dialog
 ### Manual steps
 
 - Launch SHBrowseForFolderExample.exe
-- Locate the Process Id in task manager
-- Attach Frida manually: `frida -p <PROCESSID> -l Fix-SHBrowseForFolder.compiled.js`
+- Locate the `PROCESSID` in task manager
+- Attach Frida manually: `frida -p PROCESSID -l Fix-SHBrowseForFolder.compiled.js`
 
 ## Runtime output
 

@@ -71,18 +71,18 @@ var pidl = Memory.alloc(Process.pointerSize);
 COM.ThrowIfFailed(SHGetIDListFromObject(shellItem.Get(), pidl));
 ```
 
-Create a struct around `browseinfoPtr` memory:
+Create a [BROWSEINFOW](https://docs.microsoft.com/en-us/windows/win32/api/shlobj_core/ns-shlobj_core-browseinfow) struct at `browseinfoPtr`:
 ```js
-var browseinfo = new Win32.Struct({ // BROWSEINFO
-		'hwndOwner':'int',
-		'pidlRoot':'pointer',
-		'pszDisplayName':'pointer',
-		'lpszTitle':'pointer',
-		'ulFlags':'uint',
-		'lpfn':'pointer',
-		'lParam':'long',
-		'iImage':'int',
-	}, browseinfoPtr);
+var browseinfo = new Win32.Struct({
+    'hwndOwner':'int',
+    'pidlRoot':'pointer',
+    'pszDisplayName':'pointer',
+    'lpszTitle':'pointer',
+    'ulFlags':'uint',
+    'lpfn':'pointer',
+    'lParam':'long',
+    'iImage':'int',
+}, browseinfoPtr);
 ```
 
 Then read or write as javascript object properties:

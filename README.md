@@ -18,23 +18,25 @@ Modern IFileDialog folder selection dialog
 
 ## Common scripts
 
-### Windows-Platform.js
-Windows-Platform.js has features for working with `GUID` and other common types as well as calling COM and WinRT APIs.
+### [See README for all common scripts](./common/README.md)
+
+### Win32.js
+Win32.js has features for working with `GUID`, `HSTRING`, `BSTR`, C-style structs as well as calling COM and WinRT APIs.
 
 #### Examples
 
 Initialize COM (CoInitialize)
-```
+```js
 COM.Initialize(COM.ApartmentType.STA);
 ```
 
 Allocate memory and fill in a GUID:
-```
+```js
 var CLSID_FileOpenDialog = Win32.GUID.alloc("DC1C5A9C-E88A-4dde-A5A1-60F82A20AEF7");
 ```
 
 Define a COM interface based on IUnknown:
-```
+```js
 var IFileDialog = new COM.Interface(COM.IUnknown, {
 	Show: [0, ['uint']],
 	SetOptions: [6, ['uint']],
@@ -44,7 +46,7 @@ var IFileDialog = new COM.Interface(COM.IUnknown, {
 Each entry value is an ordinal in the interface and a set of function argument types.
 
 Create an object and work with the resulting COM interfaces:
-```
+```js
 var modalWindow = COM.CreateInstance(CLSID_FileOpenDialog, COM.ClassContext.InProc, IFileDialog);
 modalWindow.SetOptions(FOS_PICKFOLDERS);
 modalWindow.Show(browseinfo.hwndOwner);
@@ -56,12 +58,9 @@ var pidl = Memory.alloc(Process.pointerSize);
 COM.ThrowIfFailed(SHGetIDListFromObject(shellItem.Get(), pidl));
 ```
 
-### Struct.js
-Struct.js enables defining a struct layout and then attaching it to a segment of memory.
-
 Create a struct around `browseinfoPtr` memory:
-```
-var browseinfo = new Struct({ // BROWSEINFO
+```js
+var browseinfo = new Win32.Struct({ // BROWSEINFO
 		'hwndOwner':'int',
 		'pidlRoot':'pointer',
 		'pszDisplayName':'pointer',
@@ -74,6 +73,6 @@ var browseinfo = new Struct({ // BROWSEINFO
 ```
 
 Then read or write as javascript object properties:
-```
+```js
 console.log("Flags: 0x" + browseinfo.ulFlags.toString(16));
 ```

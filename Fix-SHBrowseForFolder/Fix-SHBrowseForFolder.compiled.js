@@ -1,8 +1,7 @@
 
 (function () {
     "use strict";
-    // SHIM: duktape
-    if (!String.prototype.startsWith) { String.prototype.startsWith = function (str) { return !this.indexOf(str); } }
+
     // SHIM: get function.apply fix
     function METHOD_APPLY_SHIM(method, args) {
         if (args.length == 1) { return method(args[0]);
@@ -20,6 +19,7 @@
     // Microsoft APIs use stdcall on x86.
     function GetAbi() { return Process.arch == 'x64' ? 'win64' : 'stdcall'; }
 
+	// Given a set of definitions, build a javascript object with getters/setters around base_ptr.
     var Struct = function (structInfo) {
         var TypeMap = {
             'pointer': [Process.pointerSize, Memory.readPointer, Memory.writePointer],
@@ -221,7 +221,7 @@
         // COM Flow control
         function Succeeded(hr) {
             var ret = parseInt(hr, 10);
-            return ret == S_OK || ret == S_FALSE; // TODO proper success bit check
+            return ret == S_OK || ret == S_FALSE;
         }
         function Failed(hr) { return !Succeeded(hr); }
         function ThrowIfFailed(hr) {
@@ -437,9 +437,7 @@
             CoInitializeEx: new NativeFunction(Module.findExportByName("Ole32.dll", "CoInitializeEx"), 'uint', ['pointer', 'uint'], GetAbi()),
             CoCreateInstance: new NativeFunction(Module.findExportByName("Ole32.dll", "CoCreateInstance"), 'uint', ['pointer', 'pointer', 'uint', 'pointer', 'pointer'], GetAbi()),
         };
-		this.Ole32 = Ole32;
 
-        this.HRESULTs = HRESULTMap;
         this.S_OK = S_OK;
         this.ApartmentType = { // COINIT
             STA: 0x2,

@@ -15,6 +15,11 @@ namespace DotNetBridge
     [Guid("ddb71722-f7e5-4c45-817e-cc1b84bfab4e")]
     public class DotNetBridge : IDotNetBridge
     {
+        delegate IntPtr JsonDelegate(IntPtr args);
+
+        int _lastObjectId = 0;
+        Dictionary<int, object> _objects = new Dictionary<int, object>();
+
         public string CreateObject(string typeName, string args)
         {
             return NoThrowBoundary(() => DehydrateResult(Activator.CreateInstance(FindTypeByName(typeName), HydrateArguments(args))));
@@ -59,7 +64,6 @@ namespace DotNetBridge
             });
         }
 
-        delegate IntPtr JsonDelegate(IntPtr args);
         public string CreateDelegate(string typeName, IntPtr callback)
         {
             return NoThrowBoundary(() =>
@@ -167,10 +171,8 @@ namespace DotNetBridge
             });
         }
 
-        static int _object_last = 0;
-        static Dictionary<int, object> _objects = new Dictionary<int, object>();
-
         int ObjetToObjectRef(object o) { return _objects.ContainsValue(o) ? _objects.FirstOrDefault(x => x.Value == o).Key : -1; }
+
         object ObjectRefToObject(OBJECT o) { return _objects[o.Id]; }
 
         string NoThrowBoundary(Func<object> invoke)
@@ -186,7 +188,6 @@ namespace DotNetBridge
             }
         }
 
-        #region Serialization
         DataContractJsonSerializer GetBridgeSerializer(Type type)
         {
             return new DataContractJsonSerializer(type, new DataContractJsonSerializerSettings
@@ -244,13 +245,12 @@ namespace DotNetBridge
             {
                 lock (_objects)
                 {
-                    var objId = ++_object_last;
+                    var objId = ++_lastObjectId;
                     _objects.Add(objId, output);
                     return new OBJECT { Id = objId };
                 }
             }
         }
-        #endregion
 
         IEnumerable<Assembly> GetLoadedAssemblies()
         {

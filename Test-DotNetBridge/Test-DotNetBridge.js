@@ -1,10 +1,15 @@
-console.log("Begin");
-
+"use strict";
 // The goal of this set of tests is to exercise the CLR helpers to create and interact with objects through the DotNetBridge.dll.
 
-CLR.Init();
-CLR.AddNamespace("System");
-CLR.EnableTraceListener();
+console.log("Begin");
+
+const localSettings = require('./local_settings');
+
+const CLR = require('../common/DotNet');
+const System = CLR.GetNamespace("System");
+
+const CLRDebug = require('../common/DotNet-debug');
+CLRDebug.EnableTraceListener();
 
 // Wait for the background thread to start.
 System.Threading.Thread.Sleep(1000);
@@ -17,8 +22,10 @@ function VERIFY_IS_EQUAL(expected, actual) {
 	}
 }
 
-System.Reflection.Assembly.LoadFile(scriptRoot + "TestLibrary1.dll");
-CLR.AddNamespace("TestLibrary1");
+const asmPath = localSettings.ScriptRoot + "TestLibrary1.dll";
+console.log("Loading " + asmPath);
+System.Reflection.Assembly.LoadFile(asmPath);
+const TestLibrary1 = CLR.GetNamespace("TestLibrary1");
 
 // Method
 VERIFY_IS_EQUAL(TestLibrary1.Test1.TestMethod(), "TestMethod");
@@ -155,4 +162,11 @@ try {
 io.ToString();
 VERIFY_IS_EQUAL(objectNotFound, true);
 
-console.log("End: SUCCESS");
+console.log("####################################");
+console.log("####################################");
+console.log("             SUCCESS");
+console.log("####################################");
+console.log("####################################");
+console.log("[*] Unloading...");
+System.Threading.Thread.Sleep(1000);
+System.Diagnostics.Process.GetCurrentProcess().Kill();

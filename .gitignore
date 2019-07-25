@@ -4,6 +4,12 @@
 # Output binaries
 *.dll
 
+# Build artifacts
+*local_settings.json
+
+# npm stuff
+*package-lock.json
+
 # User-specific files
 *.suo
 *.user

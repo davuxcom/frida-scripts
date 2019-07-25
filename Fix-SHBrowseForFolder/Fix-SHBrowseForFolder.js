@@ -1,7 +1,14 @@
+"use strict";
+
 console.log("Starting");
 
+const Win32 = require('../common/win32');
+const Struct = require('../common/struct');
+const GUID = require('../common/guid');
+const COM = require('../common/com');
+
 // Define API's from windows headers.
-var CLSID_FileOpenDialog = Win32.GUID.alloc("DC1C5A9C-E88A-4dde-A5A1-60F82A20AEF7");
+var CLSID_FileOpenDialog = GUID.alloc("DC1C5A9C-E88A-4dde-A5A1-60F82A20AEF7");
 var FOS_PICKFOLDERS	= 0x20;
 var IFileDialog = new COM.Interface(COM.IUnknown, {
 	Show: [0, ['uint']],
@@ -22,7 +29,7 @@ var BIF_RETURNONLYFSDIRS = (0x00000001);
 Interceptor.replace(SHBrowseForFolderPtr, new NativeCallback(function (browseinfoPtr) {
     console.log("SHBrowseForFolderW Entry");
 
-	var browseinfo = new Win32.Struct({ // BROWSEINFO
+	var browseinfo = new Struct({ // BROWSEINFO
 			'hwndOwner':'int',
 			'pidlRoot':'pointer',
 			'pszDisplayName':'pointer',

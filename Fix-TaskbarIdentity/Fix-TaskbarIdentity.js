@@ -1,3 +1,4 @@
+"use strict";
 
 // OBJECTIVE: 
 // Wait 5 seconds
@@ -5,9 +6,15 @@
 // Set the window property store AppId on that hwnd
 // Taskbar will recognize the change and show a unique button for this window
 
+const Win32 = require('../common/win32');
+const Struct = require('../common/struct');
+const GUID = require('../common/guid');
+const COM = require('../common/com');
+const CLR = require('../common/dotnet');
+const System = CLR.GetNamespace("System");
 
 // Add some custom types. [size, readFunc, writeFunc]
-Win32.TypeMap['pwstr'] = [Process.pointerSize, 
+Struct.TypeMap['pwstr'] = [Process.pointerSize, 
     function(addr) { return Memory.readUtf16String(Memory.readPointer(addr)); },     
     function(addr, newValue) { 
         var stringRef = Memory.allocUtf16String(newValue);
@@ -15,19 +22,18 @@ Win32.TypeMap['pwstr'] = [Process.pointerSize,
         return stringRef; // tied to object lifetime.
     }
 ];
-Win32.TypeMap['guid'] = [16, 
-    Win32.GUID.read, 
-    function (addr, newValue) { Memory.copy(addr, Win32.GUID.alloc(newValue), 16); }
+Struct.TypeMap['guid'] = [16, 
+    GUID.read, 
+    function (addr, newValue) { Memory.copy(addr, GUID.alloc(newValue), 16); }
 ];
  
-
 // API from windows headers
 var PROPKEY = {
     fmtid: 'guid',
     pid: 'ulong'
 }
 
-var PKEY_AppUserModel_Id = new Win32.Struct(PROPKEY);
+var PKEY_AppUserModel_Id = new Struct(PROPKEY);
 PKEY_AppUserModel_Id.fmtid = "9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3";
 PKEY_AppUserModel_Id.pid = 5;
 
@@ -58,7 +64,7 @@ function SetAppIdForWindow(hwnd, appId) {
     var propStore = new COM.Pointer(IPropertyStore);
     COM.ThrowIfFailed(Shell32.SHGetPropertyStoreForWindow(hwnd, IPropertyStore.IID, propStore.GetAddressOf()));
 
-    var propVar = new Win32.Struct(PROPVARIANT);
+    var propVar = new Struct(PROPVARIANT);
     propVar.vt = VT_LPWSTR;
     propVar.pwszVal = appId;
     console.log(propVar.pwszVal);
@@ -66,9 +72,6 @@ function SetAppIdForWindow(hwnd, appId) {
 
     COM.ThrowIfFailed(propStore.SetValue(PKEY_AppUserModel_Id.Get(), propVar.Get()));
 }
-
-CLR.Init();
-CLR.AddNamespace("System");
 
 setTimeout(function() {
     function CheckForMainWindow() {

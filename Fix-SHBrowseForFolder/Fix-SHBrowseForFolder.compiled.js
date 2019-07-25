@@ -1,540 +1,550 @@
+(function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
+"use strict";
 
-(function () {
-    "use strict";
-
-    // SHIM: get function.apply fix
-    function METHOD_APPLY_SHIM(method, args) {
-        if (args.length == 1) { return method(args[0]);
-        } else if (args.length == 2) { return method(args[0], args[1]);
-        } else if (args.length == 3) { return method(args[0], args[1], args[2]);
-        } else if (args.length == 4) { return method(args[0], args[1], args[2], args[3]);
-        } else if (args.length == 5) { return method(args[0], args[1], args[2], args[3], args[4]);
-        } else if (args.length == 6) { return method(args[0], args[1], args[2], args[3], args[4], args[5]);
-        } else if (args.length == 7) { return method(args[0], args[1], args[2], args[3], args[4], args[5], args[6]);
-        } else if (args.length == 8) { return method(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7]);
-        } else if (args.length == 9) { return method(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8]);
-        } else if (args.length == 10) { return method(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[10]);
-        } else { throw 'Not implemented for this many args'; }
-    }
-    // Microsoft APIs use stdcall on x86.
-    function GetAbi() { return Process.arch == 'x64' ? 'win64' : 'stdcall'; }
-
-	// Given a set of definitions, build a javascript object with getters/setters around base_ptr.
-    var Struct = function (structInfo) {
-        var TypeMap = {
-            'pointer': [Process.pointerSize, Memory.readPointer, Memory.writePointer],
-            'char': [1, Memory.readS8, Memory.writeS8], 'uchar': [1, Memory.readU8, Memory.writeU8],
-            'int8': [1, Memory.readS8, Memory.writeS8], 'uint8': [1, Memory.readU8, Memory.writeU8],
-            'int16': [2, Memory.readS16, Memory.writeS16], 'uint16': [2, Memory.readU16, Memory.writeU16],
-            'int': [4, Memory.readS32, Memory.writeS32], 'uint': [4, Memory.readU32, Memory.writeU32],
-            'int32': [4, Memory.readS32, Memory.writeS32], 'uint32': [4, Memory.readU32, Memory.writeU32],
-            'long': [4, Memory.readS32, Memory.writeS32], 'ulong': [4, Memory.readU32, Memory.writeU32],
-            'float': [4, Memory.readFloat, Memory.writeFloat], 'double': [8, Memory.readDouble, Memory.writeDouble],
-            'int64': [8, Memory.readS64, Memory.writeS64], 'uint64': [8, Memory.readU64, Memory.writeU64],
-        };
-
-        function LookupType(stringType) {
-            for (var type in TypeMap) { if (stringType == type) { return TypeMap[type]; } }
-            throw Error("Didn't find " + JSON.stringify(stringType) + " in TypeMap");
-        }
-
-        var setter_result_cache = {};
-        function CreateGetterSetter(self, name, type, offset) {
-            Object.defineProperty(self, name, {
-                get: function () { return LookupType(type)[1](base_ptr.add(offset)); },
-                set: function (newValue) { setter_result_cache[name] = LookupType(type)[2](base_ptr.add(offset), newValue); }
-            });
-        };
-
-        function SizeOfType(stringType) { return LookupType(stringType)[0]; }
-
-        var base_ptr_size = 0;
-        for (var member in structInfo) {
-            var member_size = 0;
-            if (member == "union") {
-                var union = structInfo[member];
-                for (var union_member in union) {
-                    var union_member_type = union[union_member];
-                    var union_member_size = SizeOfType(union_member_type);
-                    if (member_size < union_member_size) { member_size = union_member_size; }
-                    CreateGetterSetter(this, union_member, union_member_type, base_ptr_size);
-                }
-            } else {
-                var member_size = SizeOfType(structInfo[member]);
-                CreateGetterSetter(this, member, structInfo[member], base_ptr_size);
-            }
-            base_ptr_size += member_size;
-        }
-
-		var base_ptr = Memory.alloc(base_ptr_size);
-
-        this.Get = function () { return base_ptr; }
-        Object.defineProperty(this, "Size", { get: function () { return base_ptr_size; } });
-    }
-
-    var _Win32 = null;
-    Object.defineProperty(global, "Win32", { get: function () {
-        if (_Win32 == null) { _Win32 = new CreateWin32(); }
-        return _Win32;
-    }});
-    function CreateWin32() {
-        var _GUID = null;
-        Object.defineProperty(this, "GUID", { get: function () {
-                if (_GUID == null) { _GUID = new CreateGUID(); }
-                return _GUID;
-        }});
-        function CreateGUID() {
-            var Ole32 = {
-                CLSIDFromString: new NativeFunction(Module.findExportByName("ole32.dll", "CLSIDFromString"), 'uint', ['pointer', 'pointer'], GetAbi()),
-                StringFromGUID2: new NativeFunction(Module.findExportByName("ole32.dll", "StringFromGUID2"), 'int', ['pointer', 'pointer', 'int'], GetAbi()),
-            };
-            const guid_size = 16;
-
-            this.alloc = function (guid_string) {
-                if (guid_string.length == 32) { // 6fdf6ffced7794fa407ea7b86ed9e59d
-                    guid_string = "{" + guid_string.substr(0, 8) + "-" + raw_guid.substr(8, 4) + "-" + raw_guid.substr(12, 4) + "-" + raw_guid.substr(16, 4) + "-" + raw_guid.substr(20) + "}";
-                } else if (guid_string.length == 36) { // 6fdf6ffc-ed77-94fa-407e-a7b86ed9e59d
-                    guid_string = "{" + guid_string + "}";
-                } else if (guid_string.length == 38) { // {6fdf6ffc-ed77-94fa-407e-a7b86ed9e59d}
-                    guid_string = guid_string;
-                } else {
-                    throw Error("Guid is in an unexpected or invalid format.");
-                }
-
-                var guidStructPtr = Memory.alloc(guid_size);
-                if (0 != Ole32.CLSIDFromString(Memory.allocUtf16String(guid_string), guidStructPtr)) {
-                    throw Error("Can't convert string '" + guid_string + "' to GUID.");
-                }
-                return guidStructPtr;
-            }
-
-            this.read = function (guid_ptr) {
-                var cbGuidStr = 128; // bytes
-                var guidBuffer = Memory.alloc(cbGuidStr);
-                if (Ole32.StringFromGUID2(guid_ptr, guidBuffer, cbGuidStr / 2 /* wchar_t */) > 0) {
-                    return Memory.readUtf16String(guidBuffer);
-                } else {
-                    throw Error('Failed to parse guid');
-                }
-            }
-        }
-		this.Abi = GetAbi();
-		this.Struct = Struct;
-    }
-
-    var _WinRT = null;
-    Object.defineProperty(global, "WinRT", { get: function () {
-        if (_WinRT == null) { _WinRT = new CreateWinRT(); }
-        return _WinRT;
-    }});
-    function CreateWinRT() {
-        function FindHiddenExport(moduleName, procName) {
-            var Kernel32 = {
-                LoadLibrary: new NativeFunction(Module.findExportByName("kernel32.dll", "LoadLibraryW"), 'pointer', ['pointer'], GetAbi()),
-                GetProcAddress: new NativeFunction(Module.findExportByName("kernel32.dll", "GetProcAddress"), 'pointer', ['pointer', 'pointer'], GetAbi()),
-            };
-            var moduleAddr = Kernel32.LoadLibrary(Memory.allocUtf16String(moduleName));
-            if (moduleAddr == 0x0) { throw Error("Didn't load " + moduleName); }
-            return Kernel32.GetProcAddress(moduleAddr, Memory.allocAnsiString(procName));
-        }
-
-        var ComBase = {
-            RoInitialize: new NativeFunction(FindHiddenExport("combase.dll", "RoInitialize"), 'uint', ['uint'], GetAbi()),
-            RoActivateInstance: new NativeFunction(FindHiddenExport("combase.dll", "RoActivateInstance"), 'uint', ['pointer', 'pointer'], GetAbi()),
-            RoGetActivationFactory: new NativeFunction(FindHiddenExport("combase.dll", "RoGetActivationFactory"), 'uint', ['pointer', 'pointer', 'pointer'], GetAbi()),
-        };
-
-        this.Initialize = function () { ThrowIfFailed(ComBase.RoInitialize(1)); }; //RO_INIT_MULTITHREADED
-
-        this.ActivateInstance = function (activableClassId) {
-            var ret = new COM.Pointer(COM.IInspectable);
-            COM.ThrowIfFailed(ComBase.RoActivateInstance(this.HSTRING.alloc(activableClassId), ret.GetAddressOf()));
-            //console.log("WinRT.ActivateInstance: " + activableClassId);
-            return ret;
-        };
-
-        this.GetActivationFactory = function (activableClassId, idl) {
-            var ret = new COM.Pointer(idl);
-            COM.ThrowIfFailed(ComBase.RoGetActivationFactory(this.HSTRING.alloc(activableClassId), idl.IID, ret.GetAddressOf()));
-            //console.log("WinRT.GetActivationFactory: " + activableClassId);
-            return ret;
-        };
-
-        this.TypedEventHandler = function (callback, guidStr) {
-            var eventHandler = new COM.RuntimeObject(Win32.GUID.alloc(guidStr));
-            eventHandler.AddEntry(function (this_ptr, s, e) { // Invoke
-                callback(new COM.Pointer(COM.IInspectable).Attach(s), new COM.Pointer(COM.IInspectable).Attach(e));
-                return COM.S_OK;
-            }, 'uint', ['pointer', 'pointer', 'pointer']);
-            return eventHandler.GetAddress();
-        }
-
-        this.EventRegistrationToken = function () { return new Struct({ value: 'int64' }); }
-
-        var _HSTRING = null;
-        Object.defineProperty(this, "HSTRING", { get: function () {
-            if (_HSTRING == null) { _HSTRING = new CreateHSTRING(); }
-            return _HSTRING;
-        }});
-        function CreateHSTRING() {
-            var ComBase = {
-                WindowsCreateString: new NativeFunction(FindHiddenExport("combase.dll", "WindowsCreateString"), 'uint', ['pointer', 'uint', 'pointer'], GetAbi()),
-                WindowsDeleteString: new NativeFunction(FindHiddenExport("combase.dll", "WindowsDeleteString"), 'uint', ['pointer'], GetAbi()),
-                WindowsGetStringRawBuffer: new NativeFunction(FindHiddenExport("combase.dll", "WindowsGetStringRawBuffer"), 'pointer', ['pointer', 'pointer'], GetAbi()),
-            };
-            this.alloc = function (str) {
-                var ret = new Struct({ 'value': 'pointer' });
-                COM.ThrowIfFailed(ComBase.WindowsCreateString(Memory.allocUtf16String(str), str.length, ret.Get()));
-                return ret.value;
-            }
-            this.read = function (hstring) { return Memory.readUtf16String(ComBase.WindowsGetStringRawBuffer(hstring, NULL)); }
-            this.free = function (hstring) { return ComBase.WindowsDeleteString(hstring); }
-        }
-    }
-
-    var _COM = null;
-    Object.defineProperty(global, "COM", { get: function () {
-        if (_COM == null) { _COM = new CreateCOM(); }
-        return _COM;
-    }});
-    function CreateCOM() {
-        var GUID = Win32.GUID;
-
-        var HRESULTMap = [
-            ['E_ABORT', 0x80004004],
-            ['E_ACCESSDENIED', 0x80070005],
-            ['E_FAIL', 0x80004005],
-            ['E_HANDLE', 0x80070006],
-            ['E_INVALIDARG', 0x80070057],
-            ['E_NOINTERFACE', 0x80004002],
-            ['E_NOTIMPL', 0x80004001],
-            ['E_OUTOFMEMORY', 0x8007000E],
-            ['E_POINTER', 0x80004003],
-            ['E_UNEXPECTED', 0x8000FFFF],
-        ];
-
-        // COM global constants
-        var S_OK = 0;
-        var S_FALSE = 1;
-        var E_NOINTERFACE = 0x80004002;
-
-        // COM Flow control
-        function Succeeded(hr) {
-            var ret = parseInt(hr, 10);
-            return ret == S_OK || ret == S_FALSE;
-        }
-        function Failed(hr) { return !Succeeded(hr); }
-        function ThrowIfFailed(hr) {
-            if (Failed(hr)) {
-                var friendlyStr = "";
-                for (var i = 0; i < HRESULTMap.length; ++i) {
-                    if (hr == HRESULTMap[i][1]) {
-                        friendlyStr = " " + HRESULTMap[i][0];
-                        break;
-                    }
-                }
-                throw new Error('COMException 0x' + hr.toString(16) + friendlyStr);
-            }
-            return hr;
-        }
-
-        var IUnknown = {
-            IID: GUID.alloc("00000000-0000-0000-C000-000000000046"),
-            QueryInterface: [0, ['pointer', 'pointer']],
-            AddRef: [1, []],
-            Release: [2, []],
-        };
-
-        var IInspectable = {
-            IID: GUID.alloc("AF86E2E0-B12D-4c6a-9C5A-D7AA65101E90"),
-            // IUnknown
-            QueryInterface: IUnknown.QueryInterface,
-            AddRef: IUnknown.AddRef,
-            Release: IUnknown.Release,
-            // IInspectable
-            GetIids: [3, ['pointer', 'pointer']],
-            GetRuntimeClassName: [4, ['pointer']],
-            GetTrustLevel: [5, ['pointer']],
-        };
-
-        function ComInterface(baseInterface, methods, iid_str) {
-            for (var method in methods) {
-                this[method] = methods[method];
-            }
-
-            this.IID = GUID.alloc(iid_str);
-            if (baseInterface.IID == IInspectable.IID) {
-                this.IInspectable = true;
-            }
-        }
-
-        var IAgileObject = new ComInterface(IUnknown, {
-            // Marker interface, it has no methods.
-        }, "94EA2B94-E9CC-49E0-C0FF-EE64CA8F5B90");
-
-        function iunknown_ptr(address, idl) {
-            function vtable_wrapper(address) {
-                var getMethodAddress = function (ordinal) {
-                    var addr = Memory.readPointer(address); // vtbl
-                    return Memory.readPointer(addr.add(Process.pointerSize * ordinal)); // pointer to func
-                }
-                this.GetMethodAddress = getMethodAddress;
-
-                this.Invoke = function (ordinal, paramTypes, params, tagName) {
-                    if (address == 0x0) { throw Error("Can't invoke method on null pointer"); }
-                    //console.log("com_ptr(" + address + ")->" + tagName + " (" + params + ")");
-                    // Add 'this' as first argument
-                    var localTypes = paramTypes.slice();
-                    localTypes.unshift('pointer');
-                    var localParams = params.slice();
-                    localParams.unshift(address);
-                    return METHOD_APPLY_SHIM(new NativeFunction(getMethodAddress(ordinal), 'uint', localTypes, GetAbi()), localParams);
-                };
-            }
-            var vtable = new vtable_wrapper(address);
-
-            var calculateOrdinal = function (ordinal) {
-                var countMethods = function (idl) {
-                    var count = -1; // IID will be the only non-method property.
-                    for (var method in idl) { ++count; }
-                    return count;
-                }
-                return ordinal + (idl.IInspectable ? countMethods(IInspectable) : countMethods(IUnknown));
-            };
-
-            this.InvokeMethod = function (ordinal, paramTypes, params, tagName) {
-                return vtable.Invoke(calculateOrdinal(ordinal), paramTypes, params, tagName);
-            }
-            this.GetMethodAddress = function (ordinal) {
-                return vtable.GetMethodAddress(calculateOrdinal(ordinal));
-            }
-
-            // IUnknown
-            this.QueryInterface = function (iid, ppv) { return vtable.Invoke(IUnknown.QueryInterface[0], IUnknown.QueryInterface[1], [iid, ppv], "QueryInterface"); };
-            this.AddRef = function () { return vtable.Invoke(IUnknown.AddRef[0], IUnknown.AddRef[1], [], "AddRef"); };
-            this.Release = function () { return vtable.Invoke(IUnknown.Release[0], IUnknown.Release[1], [], "Release"); };
-
-            // IInspectable
-            this.GetIids = function () {
-                var size_ptr = new Struct({ 'value': 'pointer' });
-                var iids_ptr = new Struct({ 'value': 'pointer' });
-                ThrowIfFailed(vtable.Invoke(IInspectable.GetIids[0], IInspectable.GetIids[1], [size_ptr.Get(), iids_ptr.Get()], "GetIids"));
-                var size = Memory.readUInt(size_ptr.value);
-                var ret = [];
-                for (var i = 0; i < size; ++i) {
-                    ret.push(GUID.read(iids_ptr.value.add(i * Process.pointerSize)));
-                }
-                return ret;
-            };
-            this.GetRuntimeClassName = function () {
-                var class_name_ptr = new Struct({ 'value': 'pointer' });
-                if (Succeeded(vtable.Invoke(IInspectable.GetRuntimeClassName[0], IInspectable.GetRuntimeClassName[1], [class_name_ptr.Get()], "GetRuntimeClassName"))) {
-                    return WinRT.HSTRING.read(class_name_ptr.value);
-                } else {
-                    return "[GetRuntimeClassName Failed]";
-                }
-            }
-            this.GetTrustLevel = function () {
-                var trust_ptr = new Struct({ 'value': 'pointer' });
-                ThrowIfFailed(vtable.Invoke(IInspectable.GetTrustLevel[0], IInspectable.GetTrustLevel[1], [trust_ptr.Get()], "GetTrustLevel"));
-                var trust_level = Memory.readUInt(trust_ptr.value);
-                return trust_level == 0 ? "BaseTrust" : trust_level == 1 ? "PartialTrust" : "FullTrust";
-            }
-        }
-
-        function com_ptr(idl) {
-            var _ptr = new Struct({ 'value': 'pointer' }); // the real reference is here
-
-            var resolve_ptr = function () { return new iunknown_ptr(_ptr.value, idl); }
-            this.$ComPtr_Invoke = function (methodDfn, args) { return resolve_ptr().InvokeMethod(methodDfn[0], methodDfn[1], args, "$ComPtr_Invoke"); };
-            this.$ComPtr_GetMethodAddress = function (methodDfn) { return resolve_ptr().GetMethodAddress(methodDfn[0]); }
-            this.Release = function () { return resolve_ptr().Release(); }
-            this.GetAddressOf = function () { return _ptr.Get(); }
-            this.Get = function () { return _ptr.value; }
-            this.As = function (otherIdl) {
-                var ret = new com_ptr(otherIdl);
-                ThrowIfFailed(resolve_ptr().QueryInterface(otherIdl.IID, ret.GetAddressOf()));
-                return ret;
-            }
-            this.Attach = function (addr) {
-                _ptr.value = addr;
-                return this;
-            }
-
-            this.toString = function () {
-                var iinspectable_extra = idl == IInspectable && (_ptr.value != 0x0) ?
-                    " " + resolve_ptr().GetRuntimeClassName() + " IInspectable" + resolve_ptr().GetIids() + " " + resolve_ptr().GetTrustLevel() : "";
-                return "[com_ptr " + _ptr.Get() + iinspectable_extra + "]";
-            }
-
-            var self = this;
-            var CreateMethod = function (methodName) {
-                var removed_methods = ["QueryInterface", "AddRef", "Release", "GetIids", "GetRuntimeClassName", "GetTrustLevel", "IID", "IInspectable"];
-                for (var i = 0; i < removed_methods.length; ++i) {
-                    if (removed_methods[i] == method) {
-                        return;
-                    }
-                }
-
-                var MethodProc = function () {
-                    return resolve_ptr().InvokeMethod(idl[methodName][0], idl[methodName][1], Array.prototype.slice.call(arguments, 0), methodName, idl[methodName][2]);
-                }
-                MethodProc.GetAddressOf = function () {
-                    return resolve_ptr().GetMethodAddress(idl[methodName][0]);
-                }
-                self[methodName] = MethodProc;
-            }
-
-            // Add IDL methods onto this object.
-            for (var method in idl) { CreateMethod(method); }
-        }
-
-        function RuntimeComObject(iid) {
-            var vtable_entries = [];
-            var iids = [IUnknown.IID, IAgileObject.IID, iid];
-            var refCount = 1;
-
-            this.AddEntry = function (callback, retType, paramTypes) {
-                vtable_entries.push(new NativeCallback(callback, retType, paramTypes, GetAbi()));
-            };
-
-            this.AddIid = function (iid) { iids.push(iid); };
-
-            this.GetAddress = function () {
-                var vTable = Memory.alloc(Process.pointerSize * vtable_entries.length);
-
-                for (var i = 0; i < vtable_entries.length; ++i) {
-                    var vTableEntry = vTable.add(Process.pointerSize * i);
-                    Memory.writePointer(vTableEntry, vtable_entries[i]);
-                }
-
-                var com_object_pointer = new Struct({ 'value': 'pointer' });
-                com_object_pointer.value = vTable;
-                return com_object_pointer.Get();
-            };
-
-            // QueryInterface
-            this.AddEntry(function (this_ptr, riid, ppv) {
-                var find_guid = GUID.read(riid);
-                for (var i = 0; i < iids.length; ++i) {
-                    if (GUID.read(iids[i]) == find_guid) {
-                        ++refCount;
-                        Memory.writePointer(ppv, this_ptr);
-                        //console.log("RuntimeComObject QueryInterface S_OK: " + find_guid);
-                        return S_OK;
-                    }
-                }
-                console.error("RuntimeComObject QueryInterface E_NOINTERFACE: " + find_guid);
-                return E_NOINTERFACE;
-            }, 'uint', ['pointer', 'pointer', 'pointer']);
-            // AddRef
-            this.AddEntry(function (this_ptr) { return ++refCount; }, 'ulong', ['pointer']);
-            // Release
-            this.AddEntry(function (this_ptr) { return --refCount; }, 'ulong', ['pointer']);
-        }
-
-        var Ole32 = {
-            CoInitializeEx: new NativeFunction(Module.findExportByName("Ole32.dll", "CoInitializeEx"), 'uint', ['pointer', 'uint'], GetAbi()),
-            CoCreateInstance: new NativeFunction(Module.findExportByName("Ole32.dll", "CoCreateInstance"), 'uint', ['pointer', 'pointer', 'uint', 'pointer', 'pointer'], GetAbi()),
-        };
-
-        this.S_OK = S_OK;
-        this.ApartmentType = { // COINIT
-            STA: 0x2,
-            MTA: 0x0
-        };
-        this.ClassContext = { // CLSCTX
-            InProc: 0x1,
-            Local: 0x4,
-        };
-        this.IUnknown = IUnknown;
-        this.IInspectable = IInspectable;
-
-        this.Pointer = com_ptr;
-        this.Interface = ComInterface;
-        this.RuntimeObject = RuntimeComObject;
-        this.Succeeded = Succeeded;
-        this.Failed = Failed;
-        this.ThrowIfFailed = ThrowIfFailed;
-        this.CreateInstance = function (clsid, clsctx, idl) {
-            var ret = new com_ptr(idl);
-            ThrowIfFailed(Ole32.CoCreateInstance(clsid, NULL, clsctx, idl.IID, ret.GetAddressOf()));
-            return ret;
-        }
-        this.Initialize = function (apartment) {
-            ThrowIfFailed(Ole32.CoInitializeEx(NULL, apartment));
-        }
-
-        var _BSTR = null;
-        Object.defineProperty(this, "BSTR", {
-            get: function () {
-                if (_BSTR == null) { _BSTR = new CreateBSTR(); }
-                return _BSTR;
-            }
-        });
-        function CreateBSTR() {
-            var OleAut32 = {
-                SysAllocString: new NativeFunction(Module.findExportByName("OleAut32.dll", "SysAllocString"), 'pointer', ['pointer'], GetAbi()),
-                SysFreeString: new NativeFunction(Module.findExportByName("OleAut32.dll", "SysFreeString"), 'void', ['pointer'], GetAbi()),
-            };
-            this.alloc = function (str) { return OleAut32.SysAllocString(Memory.allocUtf16String(str)); }
-            this.read = function (bstr_ptr) { return Memory.readUtf16String(str); }
-            this.free = function (bstr_ptr) { OleAut32.SysFreeString(bstr_ptr); }
-        }
-    }
-})();
 console.log("Starting");
 
-// Define API's from windows headers.
-var CLSID_FileOpenDialog = Win32.GUID.alloc("DC1C5A9C-E88A-4dde-A5A1-60F82A20AEF7");
-var FOS_PICKFOLDERS	= 0x20;
+const Win32 = require('../common/win32');
+
+const Struct = require('../common/struct');
+
+const GUID = require('../common/guid');
+
+const COM = require('../common/com'); // Define API's from windows headers.
+
+
+var CLSID_FileOpenDialog = GUID.alloc("DC1C5A9C-E88A-4dde-A5A1-60F82A20AEF7");
+var FOS_PICKFOLDERS = 0x20;
 var IFileDialog = new COM.Interface(COM.IUnknown, {
-	Show: [0, ['uint']],
-	SetOptions: [6, ['uint']],
-	GetResult: [17, ['pointer']],
+  Show: [0, ['uint']],
+  SetOptions: [6, ['uint']],
+  GetResult: [17, ['pointer']]
 }, "42f85136-db7e-439c-85f1-e4075d135fc8");
-var IShellItem = new COM.Interface(COM.IUnknown, {
-}, "43826d1e-e718-42ee-bc55-a1e261c37bfe");
+var IShellItem = new COM.Interface(COM.IUnknown, {}, "43826d1e-e718-42ee-bc55-a1e261c37bfe");
 var SHBrowseForFolderPtr = Module.findExportByName('shell32.dll', 'SHBrowseForFolderW');
 var SHBrowseForFolder = new NativeFunction(SHBrowseForFolderPtr, 'pointer', ['pointer']);
-var SHGetIDListFromObject = new NativeFunction(Module.findExportByName('shell32.dll', 'SHGetIDListFromObject'), 'uint', ['pointer','pointer']);
-var BIF_EDITBOX = (0x00000010);
-var BIF_NEWDIALOGSTYLE = (0x00000040);
-var BIF_RETURNONLYFSDIRS = (0x00000001);
+var SHGetIDListFromObject = new NativeFunction(Module.findExportByName('shell32.dll', 'SHGetIDListFromObject'), 'uint', ['pointer', 'pointer']);
+var BIF_EDITBOX = 0x00000010;
+var BIF_NEWDIALOGSTYLE = 0x00000040;
+var BIF_RETURNONLYFSDIRS = 0x00000001; // Intercept and replace SHBrowseForFolderW
 
-
-// Intercept and replace SHBrowseForFolderW
 Interceptor.replace(SHBrowseForFolderPtr, new NativeCallback(function (browseinfoPtr) {
-    console.log("SHBrowseForFolderW Entry");
+  console.log("SHBrowseForFolderW Entry");
+  var browseinfo = new Struct({
+    // BROWSEINFO
+    'hwndOwner': 'int',
+    'pidlRoot': 'pointer',
+    'pszDisplayName': 'pointer',
+    'lpszTitle': 'pointer',
+    'ulFlags': 'uint',
+    'lpfn': 'pointer',
+    'lParam': 'long',
+    'iImage': 'int'
+  }, browseinfoPtr);
+  console.log("SHBrowseForFolderW ulFlags: 0x" + browseinfo.ulFlags.toString(16)); // Per the docs, COM should already be initialized but this wasn't the case when testing against a real app.
 
-	var browseinfo = new Win32.Struct({ // BROWSEINFO
-			'hwndOwner':'int',
-			'pidlRoot':'pointer',
-			'pszDisplayName':'pointer',
-			'lpszTitle':'pointer',
-			'ulFlags':'uint',
-			'lpfn':'pointer',
-			'lParam':'long',
-			'iImage':'int',
-		}, browseinfoPtr);
-	console.log("SHBrowseForFolderW ulFlags: 0x" + browseinfo.ulFlags.toString(16));
+  COM.Initialize(COM.ApartmentType.STA); // Create and show the replacement dialog
 
-	// Per the docs, COM should already be initialized but this wasn't the case when testing against a real app.
-	COM.Initialize(COM.ApartmentType.STA);
-	
-	// Create and show the replacement dialog
-	var modalWindow = COM.CreateInstance(CLSID_FileOpenDialog, COM.ClassContext.InProc, IFileDialog);
-	modalWindow.SetOptions(FOS_PICKFOLDERS);
-	modalWindow.Show(browseinfo.hwndOwner);
-	var shellItem = new COM.Pointer(IShellItem);
-	COM.ThrowIfFailed(modalWindow.GetResult(shellItem.GetAddressOf()));
+  var modalWindow = COM.CreateInstance(CLSID_FileOpenDialog, COM.ClassContext.InProc, IFileDialog);
+  modalWindow.SetOptions(FOS_PICKFOLDERS);
+  modalWindow.Show(browseinfo.hwndOwner);
+  var shellItem = new COM.Pointer(IShellItem);
+  COM.ThrowIfFailed(modalWindow.GetResult(shellItem.GetAddressOf())); // Convert IShellItem result to an idlist to return to SHBrowseForFolderW.
 
-	// Convert IShellItem result to an idlist to return to SHBrowseForFolderW.
-	var pidl = Memory.alloc(Process.pointerSize);
-	COM.ThrowIfFailed(SHGetIDListFromObject(shellItem.Get(), pidl));
-	
-	console.log("SHBrowseForFolderW Exit pidl=" + pidl);
-    return Memory.readPointer(pidl);
+  var pidl = Memory.alloc(Process.pointerSize);
+  COM.ThrowIfFailed(SHGetIDListFromObject(shellItem.Get(), pidl));
+  console.log("SHBrowseForFolderW Exit pidl=" + pidl);
+  return Memory.readPointer(pidl);
 }, 'pointer', ['pointer'], Win32.Abi));
-
 console.log("Ready");
+
+},{"../common/com":2,"../common/guid":3,"../common/struct":4,"../common/win32":5}],2:[function(require,module,exports){
+const Struct = require('./struct');
+
+const GUID = require('./guid');
+
+const Win32 = require('./win32');
+
+var HRESULTMap = [['E_ABORT', 0x80004004], ['E_ACCESSDENIED', 0x80070005], ['E_FAIL', 0x80004005], ['E_HANDLE', 0x80070006], ['E_INVALIDARG', 0x80070057], ['E_NOINTERFACE', 0x80004002], ['E_NOTIMPL', 0x80004001], ['E_OUTOFMEMORY', 0x8007000E], ['E_POINTER', 0x80004003], ['E_UNEXPECTED', 0x8000FFFF]]; // COM global constants
+
+var S_OK = 0;
+var S_FALSE = 1;
+var E_NOINTERFACE = 0x80004002; // COM Flow control
+
+function Succeeded(hr) {
+  var ret = parseInt(hr, 10);
+  return ret == S_OK || ret == S_FALSE;
+}
+
+function Failed(hr) {
+  return !Succeeded(hr);
+}
+
+function ThrowIfFailed(hr) {
+  if (Failed(hr)) {
+    var friendlyStr = "";
+
+    for (var i = 0; i < HRESULTMap.length; ++i) {
+      if (hr == HRESULTMap[i][1]) {
+        friendlyStr = " " + HRESULTMap[i][0];
+        break;
+      }
+    }
+
+    throw new Error('COMException 0x' + hr.toString(16) + friendlyStr);
+  }
+
+  return hr;
+}
+
+var IUnknown = {
+  IID: GUID.alloc("00000000-0000-0000-C000-000000000046"),
+  QueryInterface: [0, ['pointer', 'pointer']],
+  AddRef: [1, []],
+  Release: [2, []]
+};
+var IInspectable = {
+  IID: GUID.alloc("AF86E2E0-B12D-4c6a-9C5A-D7AA65101E90"),
+  // IUnknown
+  QueryInterface: IUnknown.QueryInterface,
+  AddRef: IUnknown.AddRef,
+  Release: IUnknown.Release,
+  // IInspectable
+  GetIids: [3, ['pointer', 'pointer']],
+  GetRuntimeClassName: [4, ['pointer']],
+  GetTrustLevel: [5, ['pointer']]
+};
+var IAgileObject = new ComInterface(IUnknown, {// Marker interface, it has no methods.
+}, "94EA2B94-E9CC-49E0-C0FF-EE64CA8F5B90");
+var Ole32 = {
+  CoInitializeEx: new NativeFunction(Module.findExportByName("Ole32.dll", "CoInitializeEx"), 'uint', ['pointer', 'uint'], Win32.Abi),
+  CoCreateInstance: new NativeFunction(Module.findExportByName("Ole32.dll", "CoCreateInstance"), 'uint', ['pointer', 'pointer', 'uint', 'pointer', 'pointer'], Win32.Abi)
+};
+
+function ComInterface(baseInterface, methods, iid_str) {
+  for (var method in methods) {
+    this[method] = methods[method];
+  }
+
+  this.IID = GUID.alloc(iid_str);
+
+  if (baseInterface.IID == IInspectable.IID) {
+    this.IInspectable = true;
+  }
+}
+
+function iunknown_ptr(address, idl) {
+  function vtable_wrapper(address) {
+    var getMethodAddress = function (ordinal) {
+      var addr = Memory.readPointer(address); // vtbl
+
+      return Memory.readPointer(addr.add(Process.pointerSize * ordinal)); // pointer to func
+    };
+
+    this.GetMethodAddress = getMethodAddress;
+
+    this.Invoke = function (ordinal, paramTypes, params, tagName) {
+      if (address == 0x0) {
+        throw Error("Can't invoke method on null pointer");
+      } //console.log("com_ptr(" + address + ")->" + tagName + " (" + params + ")");
+      // Add 'this' as first argument
+
+
+      var localTypes = paramTypes.slice();
+      localTypes.unshift('pointer');
+      var localParams = params.slice();
+      localParams.unshift(address);
+      var fn = new NativeFunction(getMethodAddress(ordinal), 'uint', localTypes, Win32.Abi);
+      return fn.apply(fn, localParams);
+    };
+  }
+
+  var vtable = new vtable_wrapper(address);
+
+  var calculateOrdinal = function (ordinal) {
+    var countMethods = function (idl) {
+      var count = -1; // IID will be the only non-method property.
+
+      for (var method in idl) {
+        ++count;
+      }
+
+      return count;
+    };
+
+    return ordinal + (idl.IInspectable ? countMethods(IInspectable) : countMethods(IUnknown));
+  };
+
+  this.InvokeMethod = function (ordinal, paramTypes, params, tagName) {
+    return vtable.Invoke(calculateOrdinal(ordinal), paramTypes, params, tagName);
+  };
+
+  this.GetMethodAddress = function (ordinal) {
+    return vtable.GetMethodAddress(calculateOrdinal(ordinal));
+  }; // IUnknown
+
+
+  this.QueryInterface = function (iid, ppv) {
+    return vtable.Invoke(IUnknown.QueryInterface[0], IUnknown.QueryInterface[1], [iid, ppv], "QueryInterface");
+  };
+
+  this.AddRef = function () {
+    return vtable.Invoke(IUnknown.AddRef[0], IUnknown.AddRef[1], [], "AddRef");
+  };
+
+  this.Release = function () {
+    return vtable.Invoke(IUnknown.Release[0], IUnknown.Release[1], [], "Release");
+  }; // IInspectable
+
+
+  this.GetIids = function () {
+    var size_ptr = new Struct({
+      'value': 'pointer'
+    });
+    var iids_ptr = new Struct({
+      'value': 'pointer'
+    });
+    ThrowIfFailed(vtable.Invoke(IInspectable.GetIids[0], IInspectable.GetIids[1], [size_ptr.Get(), iids_ptr.Get()], "GetIids"));
+    var size = Memory.readUInt(size_ptr.value);
+    var ret = [];
+
+    for (var i = 0; i < size; ++i) {
+      ret.push(GUID.read(iids_ptr.value.add(i * Process.pointerSize)));
+    }
+
+    return ret;
+  };
+
+  this.GetRuntimeClassName = function () {
+    var class_name_ptr = new Struct({
+      'value': 'pointer'
+    });
+
+    if (Succeeded(vtable.Invoke(IInspectable.GetRuntimeClassName[0], IInspectable.GetRuntimeClassName[1], [class_name_ptr.Get()], "GetRuntimeClassName"))) {
+      return WinRT.HSTRING.read(class_name_ptr.value);
+    } else {
+      return "[GetRuntimeClassName Failed]";
+    }
+  };
+
+  this.GetTrustLevel = function () {
+    var trust_ptr = new Struct({
+      'value': 'pointer'
+    });
+    ThrowIfFailed(vtable.Invoke(IInspectable.GetTrustLevel[0], IInspectable.GetTrustLevel[1], [trust_ptr.Get()], "GetTrustLevel"));
+    var trust_level = Memory.readUInt(trust_ptr.value);
+    return trust_level == 0 ? "BaseTrust" : trust_level == 1 ? "PartialTrust" : "FullTrust";
+  };
+}
+
+function com_ptr(idl) {
+  var _ptr = new Struct({
+    'value': 'pointer'
+  }); // the real reference is here
+
+
+  var resolve_ptr = function () {
+    return new iunknown_ptr(_ptr.value, idl);
+  };
+
+  this.$ComPtr_Invoke = function (methodDfn, args) {
+    return resolve_ptr().InvokeMethod(methodDfn[0], methodDfn[1], args, "$ComPtr_Invoke");
+  };
+
+  this.$ComPtr_GetMethodAddress = function (methodDfn) {
+    return resolve_ptr().GetMethodAddress(methodDfn[0]);
+  };
+
+  this.Release = function () {
+    return resolve_ptr().Release();
+  };
+
+  this.GetAddressOf = function () {
+    return _ptr.Get();
+  };
+
+  this.Get = function () {
+    return _ptr.value;
+  };
+
+  this.As = function (otherIdl) {
+    var ret = new com_ptr(otherIdl);
+    ThrowIfFailed(resolve_ptr().QueryInterface(otherIdl.IID, ret.GetAddressOf()));
+    return ret;
+  };
+
+  this.Attach = function (addr) {
+    _ptr.value = addr;
+    return this;
+  };
+
+  this.toString = function () {
+    var iinspectable_extra = idl == IInspectable && _ptr.value != 0x0 ? " " + resolve_ptr().GetRuntimeClassName() + " IInspectable" + resolve_ptr().GetIids() + " " + resolve_ptr().GetTrustLevel() : "";
+    return "[com_ptr " + _ptr.Get() + iinspectable_extra + "]";
+  };
+
+  var self = this;
+
+  var CreateMethod = function (methodName) {
+    var removed_methods = ["QueryInterface", "AddRef", "Release", "GetIids", "GetRuntimeClassName", "GetTrustLevel", "IID", "IInspectable"];
+
+    for (var i = 0; i < removed_methods.length; ++i) {
+      if (removed_methods[i] == method) {
+        return;
+      }
+    }
+
+    var MethodProc = function () {
+      return resolve_ptr().InvokeMethod(idl[methodName][0], idl[methodName][1], Array.prototype.slice.call(arguments, 0), methodName, idl[methodName][2]);
+    };
+
+    MethodProc.GetAddressOf = function () {
+      return resolve_ptr().GetMethodAddress(idl[methodName][0]);
+    };
+
+    self[methodName] = MethodProc;
+  }; // Add IDL methods onto this object.
+
+
+  for (var method in idl) {
+    CreateMethod(method);
+  }
+}
+
+function RuntimeComObject(iid) {
+  var vtable_entries = [];
+  var iids = [IUnknown.IID, IAgileObject.IID, iid];
+  var refCount = 1;
+
+  this.AddEntry = function (callback, retType, paramTypes) {
+    vtable_entries.push(new NativeCallback(callback, retType, paramTypes, Win32.Abi));
+  };
+
+  this.AddIid = function (iid) {
+    iids.push(iid);
+  };
+
+  this.GetAddress = function () {
+    var vTable = Memory.alloc(Process.pointerSize * vtable_entries.length);
+
+    for (var i = 0; i < vtable_entries.length; ++i) {
+      var vTableEntry = vTable.add(Process.pointerSize * i);
+      Memory.writePointer(vTableEntry, vtable_entries[i]);
+    }
+
+    var com_object_pointer = new Struct({
+      'value': 'pointer'
+    });
+    com_object_pointer.value = vTable;
+    return com_object_pointer.Get();
+  }; // QueryInterface
+
+
+  this.AddEntry(function (this_ptr, riid, ppv) {
+    var find_guid = GUID.read(riid);
+
+    for (var i = 0; i < iids.length; ++i) {
+      if (GUID.read(iids[i]) == find_guid) {
+        ++refCount;
+        Memory.writePointer(ppv, this_ptr); //console.log("RuntimeComObject QueryInterface S_OK: " + find_guid);
+
+        return S_OK;
+      }
+    }
+
+    console.error("RuntimeComObject QueryInterface E_NOINTERFACE: " + find_guid);
+    return E_NOINTERFACE;
+  }, 'uint', ['pointer', 'pointer', 'pointer']); // AddRef
+
+  this.AddEntry(function (this_ptr) {
+    return ++refCount;
+  }, 'ulong', ['pointer']); // Release
+
+  this.AddEntry(function (this_ptr) {
+    return --refCount;
+  }, 'ulong', ['pointer']);
+}
+
+module.exports = {
+  S_OK: S_OK,
+  ApartmentType: {
+    // COINIT
+    STA: 0x2,
+    MTA: 0x0
+  },
+  ClassContext: {
+    // CLSCTX
+    InProc: 0x1,
+    Local: 0x4
+  },
+  IUnknown: IUnknown,
+  IInspectable: IInspectable,
+  Pointer: com_ptr,
+  Interface: ComInterface,
+  RuntimeObject: RuntimeComObject,
+  Succeeded: Succeeded,
+  Failed: Failed,
+  ThrowIfFailed: ThrowIfFailed,
+  CreateInstance: function (clsid, clsctx, idl) {
+    var ret = new com_ptr(idl);
+    ThrowIfFailed(Ole32.CoCreateInstance(clsid, NULL, clsctx, idl.IID, ret.GetAddressOf()));
+    return ret;
+  },
+  Initialize: function (apartment) {
+    ThrowIfFailed(Ole32.CoInitializeEx(NULL, apartment));
+  }
+};
+
+},{"./guid":3,"./struct":4,"./win32":5}],3:[function(require,module,exports){
+"use strict";
+
+const Win32 = require('./win32');
+
+var Ole32 = {
+  CLSIDFromString: new NativeFunction(Module.findExportByName("ole32.dll", "CLSIDFromString"), 'uint', ['pointer', 'pointer'], Win32.Abi),
+  StringFromGUID2: new NativeFunction(Module.findExportByName("ole32.dll", "StringFromGUID2"), 'int', ['pointer', 'pointer', 'int'], Win32.Abi)
+};
+const GUID_SIZE_BYTES = 16;
+module.exports = {
+  Size: GUID_SIZE_BYTES,
+  alloc: function (guid_string) {
+    if (guid_string.length == 32) {
+      // 6fdf6ffced7794fa407ea7b86ed9e59d
+      guid_string = "{" + guid_string.substr(0, 8) + "-" + raw_guid.substr(8, 4) + "-" + raw_guid.substr(12, 4) + "-" + raw_guid.substr(16, 4) + "-" + raw_guid.substr(20) + "}";
+    } else if (guid_string.length == 36) {
+      // 6fdf6ffc-ed77-94fa-407e-a7b86ed9e59d
+      guid_string = "{" + guid_string + "}";
+    } else if (guid_string.length == 38) {
+      // {6fdf6ffc-ed77-94fa-407e-a7b86ed9e59d}
+      guid_string = guid_string;
+    } else {
+      throw Error("Guid is in an unexpected or invalid format.");
+    }
+
+    var guidStructPtr = Memory.alloc(GUID_SIZE_BYTES);
+
+    if (0 != Ole32.CLSIDFromString(Memory.allocUtf16String(guid_string), guidStructPtr)) {
+      throw Error("Can't convert string '" + guid_string + "' to GUID.");
+    }
+
+    return guidStructPtr;
+  },
+  read: function (guid_ptr) {
+    var cbGuidStr = 128; // bytes
+
+    var guidBuffer = Memory.alloc(cbGuidStr);
+
+    if (Ole32.StringFromGUID2(guid_ptr, guidBuffer, cbGuidStr / 2
+    /* wchar_t */
+    ) > 0) {
+      return Memory.readUtf16String(guidBuffer);
+    } else {
+      throw Error('Failed to parse guid');
+    }
+  }
+};
+
+},{"./win32":5}],4:[function(require,module,exports){
+var TypeMap = {
+  'pointer': [Process.pointerSize, Memory.readPointer, Memory.writePointer],
+  'char': [1, Memory.readS8, Memory.writeS8],
+  'uchar': [1, Memory.readU8, Memory.writeU8],
+  'int8': [1, Memory.readS8, Memory.writeS8],
+  'uint8': [1, Memory.readU8, Memory.writeU8],
+  'int16': [2, Memory.readS16, Memory.writeS16],
+  'uint16': [2, Memory.readU16, Memory.writeU16],
+  'int': [4, Memory.readS32, Memory.writeS32],
+  'uint': [4, Memory.readU32, Memory.writeU32],
+  'int32': [4, Memory.readS32, Memory.writeS32],
+  'uint32': [4, Memory.readU32, Memory.writeU32],
+  'long': [4, Memory.readS32, Memory.writeS32],
+  'ulong': [4, Memory.readU32, Memory.writeU32],
+  'float': [4, Memory.readFloat, Memory.writeFloat],
+  'double': [8, Memory.readDouble, Memory.writeDouble],
+  'int64': [8, Memory.readS64, Memory.writeS64],
+  'uint64': [8, Memory.readU64, Memory.writeU64]
+}; // Given a set of definitions, build an object with getters/setters around base_ptr.
+
+var Struct = function (structInfo) {
+  function LookupType(stringType) {
+    for (var type in TypeMap) {
+      if (stringType == type) {
+        return TypeMap[type];
+      }
+    }
+
+    throw Error("Didn't find " + JSON.stringify(stringType) + " in TypeMap");
+  }
+
+  var setter_result_cache = {};
+
+  function CreateGetterSetter(self, name, type, offset) {
+    Object.defineProperty(self, name, {
+      get: function () {
+        return LookupType(type)[1](base_ptr.add(offset));
+      },
+      set: function (newValue) {
+        setter_result_cache[name] = LookupType(type)[2](base_ptr.add(offset), newValue);
+      }
+    });
+  }
+
+  ;
+
+  function SizeOfType(stringType) {
+    return LookupType(stringType)[0];
+  }
+
+  var base_ptr_size = 0;
+
+  for (var member in structInfo) {
+    var member_size = 0;
+
+    if (member == "union") {
+      var union = structInfo[member];
+
+      for (var union_member in union) {
+        var union_member_type = union[union_member];
+        var union_member_size = SizeOfType(union_member_type);
+
+        if (member_size < union_member_size) {
+          member_size = union_member_size;
+        }
+
+        CreateGetterSetter(this, union_member, union_member_type, base_ptr_size);
+      }
+    } else {
+      var member_size = SizeOfType(structInfo[member]);
+      CreateGetterSetter(this, member, structInfo[member], base_ptr_size);
+    }
+
+    base_ptr_size += member_size;
+  }
+
+  var base_ptr = Memory.alloc(base_ptr_size);
+
+  this.Get = function () {
+    return base_ptr;
+  };
+
+  Object.defineProperty(this, "Size", {
+    get: function () {
+      return base_ptr_size;
+    }
+  });
+};
+
+module.exports = Struct;
+module.exports.TypeMap = TypeMap;
+
+},{}],5:[function(require,module,exports){
+const Struct = require('./struct');
+
+const GUID = require('./guid');
+
+module.exports = {
+  // Microsoft APIs use stdcall on x86.
+  Abi: Process.arch == 'x64' ? 'win64' : 'stdcall'
+};
+
+},{"./guid":3,"./struct":4}]},{},[1])
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbIm5vZGVfbW9kdWxlcy9icm93c2VyLXBhY2svX3ByZWx1ZGUuanMiLCJGaXgtU0hCcm93c2VGb3JGb2xkZXIuanMiLCIuLi9jb21tb24vY29tLmpzIiwiLi4vY29tbW9uL2d1aWQuanMiLCIuLi9jb21tb24vc3RydWN0LmpzIiwiLi4vY29tbW9uL3dpbjMyLmpzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQUFBO0FDQUE7O0FBRUEsT0FBTyxDQUFDLEdBQVIsQ0FBWSxVQUFaOztBQUVBLE1BQU0sS0FBSyxHQUFHLE9BQU8sQ0FBQyxpQkFBRCxDQUFyQjs7QUFDQSxNQUFNLE1BQU0sR0FBRyxPQUFPLENBQUMsa0JBQUQsQ0FBdEI7O0FBQ0EsTUFBTSxJQUFJLEdBQUcsT0FBTyxDQUFDLGdCQUFELENBQXBCOztBQUNBLE1BQU0sR0FBRyxHQUFHLE9BQU8sQ0FBQyxlQUFELENBQW5CLEMsQ0FFQTs7O0FBQ0EsSUFBSSxvQkFBb0IsR0FBRyxJQUFJLENBQUMsS0FBTCxDQUFXLHNDQUFYLENBQTNCO0FBQ0EsSUFBSSxlQUFlLEdBQUcsSUFBdEI7QUFDQSxJQUFJLFdBQVcsR0FBRyxJQUFJLEdBQUcsQ0FBQyxTQUFSLENBQWtCLEdBQUcsQ0FBQyxRQUF0QixFQUFnQztBQUNqRCxFQUFBLElBQUksRUFBRSxDQUFDLENBQUQsRUFBSSxDQUFDLE1BQUQsQ0FBSixDQUQyQztBQUVqRCxFQUFBLFVBQVUsRUFBRSxDQUFDLENBQUQsRUFBSSxDQUFDLE1BQUQsQ0FBSixDQUZxQztBQUdqRCxFQUFBLFNBQVMsRUFBRSxDQUFDLEVBQUQsRUFBSyxDQUFDLFNBQUQsQ0FBTDtBQUhzQyxDQUFoQyxFQUlmLHNDQUplLENBQWxCO0FBS0EsSUFBSSxVQUFVLEdBQUcsSUFBSSxHQUFHLENBQUMsU0FBUixDQUFrQixHQUFHLENBQUMsUUFBdEIsRUFBZ0MsRUFBaEMsRUFDZCxzQ0FEYyxDQUFqQjtBQUVBLElBQUksb0JBQW9CLEdBQUcsTUFBTSxDQUFDLGdCQUFQLENBQXdCLGFBQXhC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

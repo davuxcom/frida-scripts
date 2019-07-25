@@ -9,7 +9,7 @@ set "scriptRoot=%~dp0"
 set "scriptRoot=%scriptRoot:\=/%"
 
 rem add our path so we can locate the library at runtime
-echo var scriptRoot = "%scriptRoot%"; > %parent%.compiled.js
+echo {ScriptRoot: "%scriptRoot%"} > local_settings.json
 
-rem combine common files
-type %~dp0\..\common\win32.js %~dp0\..\common\dotnet.js %parent%.js >> %parent%.compiled.js
+rem have to fix frida-compile path issue so this works directly.
+.\node_modules\.bin\frida-compile.cmd Test-DotNetBridge.js -o Test-DotNetBridge.compiled.js

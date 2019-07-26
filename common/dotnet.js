@@ -20,35 +20,35 @@ var IDotNetBridge = new COM.Interface(COM.IUnknown, {
     DescribeNamespace: [5, ['pointer', 'pointer']],
 }, "ea688a1d-4be4-4cae-b2a3-9a389fcd1c8b");
 
-function ResolveResult(result) {
-    var ret = JSON.parse(Memory.readUtf16String(result));
-    if (ret && ret.__ERROR) { throw Error(ret.Message + "\n" + ret.Stack + "\n") }
-    else if (ret && ret.__OBJECT) { ret = new ClrObjectWrapper(ret); }
-    return ret;
-}
-
-function ResolveArgs(params) {
-    if (typeof params === 'undefined') { params = []; }
-    if (Object.prototype.toString.call(params) === '[object Array]') {
-        for (var i = 0; i < params.length; ++i) {
-            if (params[i] && params[i].$Clr_IsClrObject) {
-                params[i] = params[i].$Clr_Handle;
-            }
-            if (params[i] && params[i].$Clr_IsClrType) {
-                params[i] = params[i].$Clr_TypeOf().$Clr_Handle;
-            }
-        }
-        return JSON.stringify(params);
-    }
-    else {
-        throw new Error("Bad args " + params);
-    }
-}
-
 function DotNetBridge() {
     console.log("[*] Creating DotNetBridge");
     var bridge = COM.CreateInstance(CLSID_DotNetBridge, COM.ClassContext.InProc, IDotNetBridge);
 
+    function ResolveResult(result) {
+        var ret = JSON.parse(Memory.readUtf16String(result));
+        if (ret && ret.__ERROR) { throw Error(ret.Message + "\n" + ret.Stack + "\n") }
+        else if (ret && ret.__OBJECT) { ret = new ClrObjectWrapper(ret); }
+        return ret;
+    }
+    
+    function ResolveArgs(params) {
+        if (typeof params === 'undefined') { params = []; }
+        if (Object.prototype.toString.call(params) === '[object Array]') {
+            for (var i = 0; i < params.length; ++i) {
+                if (params[i] && params[i].$Clr_IsClrObject) {
+                    params[i] = params[i].$Clr_Handle;
+                }
+                if (params[i] && params[i].$Clr_IsClrType) {
+                    params[i] = params[i].$Clr_TypeOf().$Clr_Handle;
+                }
+            }
+            return JSON.stringify(params);
+        }
+        else {
+            throw new Error("Bad args " + params);
+        }
+    }
+    
     function DoCall(method) {
         var args = [];
         for (var i = 1; i < arguments.length; ++i) { args[i - 1] = arguments[i]; }
@@ -56,14 +56,14 @@ function DotNetBridge() {
         args[args.length] = outPtr.Get();   
 
         COM.ThrowIfFailed(bridge[method].apply(bridge[method], args));
-        return outPtr.value;
+        return ResolveResult(outPtr.value);
     }
     
     this.CreateObject = function(typeInfo, args) {
         if (typeInfo.IsDelegate) {
-            return ResolveResult(DoCall("CreateDelegate", Memory.allocUtf16String(typeInfo.TypeName), JsonDelegate(args)));
+            return DoCall("CreateDelegate", Memory.allocUtf16String(typeInfo.TypeName), JsonDelegate(args));
         } else {
-            return ResolveResult(DoCall("CreateObject", Memory.allocUtf16String(typeInfo.TypeName), Memory.allocUtf16String(ResolveArgs(args))));
+            return DoCall("CreateObject", Memory.allocUtf16String(typeInfo.TypeName), Memory.allocUtf16String(ResolveArgs(args)));
         }
     }
     
@@ -75,25 +75,25 @@ function DotNetBridge() {
             objHandle = Memory.allocUtf16String(JSON.stringify(objHandle));
             typeName = NULL;
         }
-        return ResolveResult(DoCall("DescribeObject", typeName, objHandle));
+        return DoCall("DescribeObject", typeName, objHandle);
     }
     
     this.ReleaseObject = function(objHandle) {
-        return ResolveResult(DoCall("ReleaseObject", Memory.allocUtf16String(JSON.stringify(objHandle))));
+        return DoCall("ReleaseObject", Memory.allocUtf16String(JSON.stringify(objHandle)));
     }
     
     this.DescribeNamespace = function(namespaceName) {
-        return ResolveResult(DoCall("DescribeNamespace", Memory.allocUtf16String(namespaceName)));
+        return DoCall("DescribeNamespace", Memory.allocUtf16String(namespaceName));
     }
     
     this.InvokeMethod = function (objHandle, typeInfo, method, args, genericTypes, returnBoxed) {
-        return ResolveResult(DoCall("InvokeMethod", 
+        return DoCall("InvokeMethod", 
             objHandle == null ? NULL : Memory.allocUtf16String(JSON.stringify(objHandle)), 
             Memory.allocUtf16String(typeInfo.TypeName), 
             Memory.allocUtf16String(method), 
             Memory.allocUtf16String(ResolveArgs(args)),
             genericTypes ? Memory.allocUtf16String(JSON.stringify(genericTypes.$Clr_Handle)) : NULL,
-            returnBoxed ? 1 : 0));
+            returnBoxed ? 1 : 0);
     };
 }
 

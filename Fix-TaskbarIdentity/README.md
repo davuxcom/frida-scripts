@@ -4,7 +4,7 @@ This script locates gets the 'main' hwnd for the current (injected) process, and
 
 ## How to use this script
 
-- Install Frida (`npm install frida`)
+- Install Frida (`npm install -g frida frida-compile`)
 - Execute `compile.cmd` to merge the scripts
 - Execute `run.cmd` to launch and attach Frida
 - Observe that `notepad.exe` has a unique button in the taskbar, and doesn't group with other notepad.exe instances.

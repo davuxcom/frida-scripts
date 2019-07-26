@@ -9,8 +9,8 @@ Replace the legacy folder dialog with the new IFileDialog dialog, enabling path 
 
 ## How to use this script
 
-- Install Frida (`npm install frida`)
-- Open Visual Studio and build `SHBrowseForFolderExample.sln`
+- Install Frida (`npm -g install frida frida-compile`)
+- Open `Visual Studio` and build `SHBrowseForFolderExample.sln`
 - Execute `compile.cmd` to merge the scripts
 - Execute `run.cmd` to launch and attach Frida
 - Select `File` -> `Open...` to invoke the folder selection dialog.

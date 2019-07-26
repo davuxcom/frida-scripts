@@ -6,13 +6,13 @@ The bridge is created as an in-process COM component in the target process.  The
 
 ## Installation
 
-- Compile `DotNetBridge.sln` for both x86 and x64 using Visual Studio.
-- Execute `register.cmd` (run elevated) to call `RegAsm` on the `DotNetBridge.dll` for both x86 and x64.  Once registered, any application can call `CoCreateInstance(CLSID_DotNetBridge)` to get a bridge object.
+- Open `Visual Studio` and build `DotNetBridge.sln` for both x86 and x64.
+- Execute `register.cmd` (run elevated) to call `RegAsm` on the `DotNetBridge.dll` for both x86 and x64.  Once registered, any application can call `CoCreateInstance(CLSID_DotNetBridge)` to get an in-process bridge object.
 - Consider running [Test-DotNetBridge](../Test-DotNetBridge) to validate the installation.
 
 ## API
 
-The API consists of a primary object, IDotNetBridge, which is to be created exactly once per process.
+The API consists of a primary object, IDotNetBridge, which is to be created exactly once per process.  All interactions are in JSON.
 
 ### DescribeNamespace(nameSpace)
 Returns a JSON array of TypeInfo for a given Namespace.

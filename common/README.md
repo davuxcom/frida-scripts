@@ -1,52 +1,47 @@
 
 # Common scripts
 
-## DotNet.js
-DotNet.js uses the DotNetBridge.dll COM component registered on the machine to add .net types to Frida scripts.
+## dotnet.js
+Calls the DotNetBridge.dll COM component registered on the machine and exposes namespaces and types.
 
-### Using .net
-
+### Example
 ```js
-CLR.Init();
-CLR.AddNamespace("System");
+const CLR = require("../common/dotnet");
+const System = CLR.GetNamespace("System");
 
 // and then call any API like so:
 System.Threading.Thread.Sleep(1000);
 System.Diagnostics.Trace.WriteLine("hello");
 ```
 
-#### Enable trace listener thread
-Connect `Trace.WriteLine()` to `console.log()` for debugging purposes:
-```js
-CLR.EnableTraceListener();
-```
-
-### Event handlers
-
+Event handlers:
 ```js
 var eventToken = System.AppDomain.CurrentDomain.AssemblyLoad += new System.AssemblyLoadEventHandler(function (s, e) { asmLoaded = true;});
 ```
 
-### See more examples
+#### [More examples: Test-DotNetBridge.js](../Test-DotNetBridge/Test-DotNetBridge.js)
 
-#### [Test-DotNetBridge.js](../Test-DotNetBridge/Test-DotNetBridge.js)
-
-## Win32.js
-
-### Win32.GUID
-Read and write GUID data:
+## dotnet-debug.js
+Connect `Trace.WriteLine()` to `console.log()` for debugging purposes:
 ```js
-var guidPtr = Win32.GUID.alloc("{6fdf6ffc-ed77-94fa-407e-a7b86ed9e59d}");
-var guidStr = Win32.GUID.read(guidPtr);
+CLRDebug.EnableTraceListener();
 ```
 
+## Win32.js
 ### Win32.Abi
 Returns `win64` or `stdcall`.
 
-### Win32.Struct
+## guid.js
+Read and write GUID data:
+```js
+var guidPtr = GUID.alloc("{6fdf6ffc-ed77-94fa-407e-a7b86ed9e59d}");
+var guidStr = GUID.read(guidPtr);
+```
+
+## struct.js
 Create a [BROWSEINFOW](https://docs.microsoft.com/en-us/windows/win32/api/shlobj_core/ns-shlobj_core-browseinfow) struct at `browseinfoPtr`:
 ```js
-var browseinfo = new Win32.Struct({
+var browseinfo = new Struct({
     'hwndOwner':'int',
     'pidlRoot':'pointer',
     'pszDisplayName':'pointer',
@@ -63,6 +58,7 @@ Then read or write as javascript object properties:
 console.log("Flags: 0x" + browseinfo.ulFlags.toString(16));
 ```
 
+## winrt.js
 ### WinRT.Initialize
 ```js
 WinRT.Initialize(); // RO_INIT_MULTITHREADED
@@ -81,13 +77,7 @@ TODO
 ### WinRT.EventRegistrationToken
 TODO
 
-### WinRT.HSTRING 
-Read and write HSTRING data:
-```js
-var hstr = WinRT.HSTRING.alloc("plain text");
-var hstrStringText = WinRT.HSTRING.read(hstr);
-```
-
+## com.js
 ### COM.Initialize
 Initialize COM (CoInitialize)
 ```js
@@ -110,6 +100,8 @@ var modalWindow = COM.CreateInstance(CLSID_FileOpenDialog, COM.ClassContext.InPr
 Misc COM constants, enums and interfaces:
 ```js
 COM.S_OK
+COM.S_FALSE
+COM.E_NOINTERFACE
 COM.ApartmentType.STA // or MTA
 COM.ClassContext.InProc // or Local
 
@@ -163,10 +155,17 @@ dispatcherFrame.AddEntry(function (this_ptr) { callback(); return COM.S_OK; }, '
 ThrowIfFailed(coreDispatcher.RunAsync(CoreDispatcherPriority.Normal, dispatcherFrame.GetAddress(), Memory.alloc(Process.pointerSize)));
 ```
 
-### COM.BSTR
+## hstring.js
+Read and write HSTRING data:
+```js
+var hstr = HSTRING.alloc("plain text");
+var hstrStringText = HSTRING.read(hstr);
+```
+
+## bstr.js
 Read and write BSTR data:
 ```js
-var bstr = COM.BSTR.alloc("plain text");
-var bstrStringText = COM.BSTR.read(bstr);
-COM.BSTR.free(bstr);
+var bstr = BSTR.alloc("plain text");
+var bstrStringText = BSTR.read(bstr);
+BSTR.free(bstr);
 ```

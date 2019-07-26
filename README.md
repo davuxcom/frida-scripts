@@ -1,24 +1,25 @@
 # Frida scripts for Windows application hooking
 This repository contains scripts for working with [Frida](https://www.frida.re/docs/home/) on Windows.  The objective of Frida scripts is to inject into a third-party target process and modify behavior.
 
-[Win32.js](./common/win32.js) and [DotNet.js](./common/dotnet.js) (along with the installed [DotNetBridge](./DotNetBridge)) add powerful base APIs for interacting with COM, WinRT and .NET APIs directly from javascript Frida scripts.
+Scripts are provided for interacting with COM, WinRT and .NET APIs directly from javascript Frida scripts.
 
 - Learn more about [Frida](https://www.frida.re/docs/home/), a dynamic code instrumentation toolkit.
-- Install Frida `npm install frida` or `pip install frida`.
+- Install Frida `npm install -g frida frida-compile`
 - Review the [Frida JavaScript API](https://www.frida.re/docs/javascript-api), which provides access to native functions and memory manipulation.  Scripts here are based on this API.
 
 ### Introduction to Frida scripts on Windows
 The workflow is this:
 - A target app is running on the machine
-- A crafted javascript file (the script) is attached and injected into the target
-- The script has a custom script to manipulate memory in the target using Frida APIs, as well as higher level APIs like win32.js and dotnet.js to call more complex APIs (e.g. opening a named pipe or streaming data to a log file)
+- A crafted javascript file (the script) compiled using `frida-compile`, merging in common resources.
+- The script is attached and injected into the target (e.g. `frida -p 1234 -l myscript.compiled.js`)
+- A custom set of instructions in the script manipulate memory in the target using Frida APIs, as well as higher level APIs like com.js and dotnet.js to call more complex APIs (e.g. opening a named pipe or streaming data to a log file)
 - The target app and script both operate concurrently from the process space of the target
 
 #### Example: attach to a running process
 We attach to a running instance of notepad by looking in task manager for the `PID` (say `1447` in this case):
 
 ```
-frida -p 1447 -l myscript.js
+frida -p 1447 -l myscript.compiled.js
 ```
 
 Frida will then start and attach to the target:
@@ -61,27 +62,18 @@ Group a specific window differently on the taskbar by assigning a unique identit
 #### [View and install Fix-TaskbarIdentity script](./Fix-TaskbarIdentity)
 
 ## Test suite: Validate DotNetBridge
-Verify that DotNetBridge is working properly.
+Verify that DotNetBridge is working properly by exercising calling .net APIs from the system and a locally compiled library.
 
 #### [View and install Test-DotNetBridge script](./Test-DotNetBridge)
 
 ## Common scripts
 
-### DotNet.js
-Call .NET APIs directly from javascript.
+### [Learn more about common scripts](./common)
+
+#### COM Example
+Define a COM interface:
 ```js
-System.IO.File.WriteAllText(path, "log data");
-```
-
-### Win32.js
-Win32.js has features for working with `GUID`, `HSTRING`, `BSTR`, C-style structs as well as calling COM and WinRT APIs.
-
-### [See README for all common scripts](./common)
-
-#### Examples
-Define a COM interface based on IUnknown:
-```js
-var CLSID_FileOpenDialog = Win32.GUID.alloc("DC1C5A9C-E88A-4dde-A5A1-60F82A20AEF7");
+var CLSID_FileOpenDialog = GUID.alloc("DC1C5A9C-E88A-4dde-A5A1-60F82A20AEF7");
 var IFileDialog = new COM.Interface(COM.IUnknown, {
 	Show: [0, ['uint']],
 	SetOptions: [6, ['uint']],
@@ -105,9 +97,16 @@ var pidl = Memory.alloc(Process.pointerSize);
 COM.ThrowIfFailed(SHGetIDListFromObject(shellItem.Get(), pidl));
 ```
 
+#### DotNet Example
+Call .NET APIs directly from javascript.
+```js
+System.IO.File.WriteAllText(path, "log data");
+```
+
+#### Struct Example
 Create a [BROWSEINFOW](https://docs.microsoft.com/en-us/windows/win32/api/shlobj_core/ns-shlobj_core-browseinfow) struct at `browseinfoPtr`:
 ```js
-var browseinfo = new Win32.Struct({
+var browseinfo = new Struct({
     'hwndOwner':'int',
     'pidlRoot':'pointer',
     'pszDisplayName':'pointer',

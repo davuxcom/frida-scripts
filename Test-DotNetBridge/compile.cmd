@@ -11,5 +11,4 @@ set "scriptRoot=%scriptRoot:\=/%"
 rem add our path so we can locate the library at runtime
 echo {ScriptRoot: "%scriptRoot%"} > local_settings.json
 
-rem have to fix frida-compile path issue so this works directly.
-.\node_modules\.bin\frida-compile.cmd Test-DotNetBridge.js -o Test-DotNetBridge.compiled.js
+frida-compile Test-DotNetBridge.js -o Test-DotNetBridge.compiled.js

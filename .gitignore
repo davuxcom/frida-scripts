@@ -3,6 +3,7 @@
 
 # Output binaries
 *.dll
+*.compiled.js
 
 # Build artifacts
 *local_settings.json

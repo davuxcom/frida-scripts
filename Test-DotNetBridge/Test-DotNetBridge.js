@@ -3,6 +3,9 @@
 
 console.log("Begin");
 
+const Test = require('../common/testutils');
+const VERIFY_IS_EQUAL = Test.VERIFY_IS_EQUAL;
+
 const localSettings = require('./local_settings');
 
 // Uncomment this line to enable warnings:
@@ -16,13 +19,6 @@ CLRDebug.EnableTraceListener();
 // Wait for the background thread to start.
 System.Threading.Thread.Sleep(1000);
 System.Diagnostics.Trace.WriteLine("hello");
-
-function VERIFY_IS_EQUAL(expected, actual) {
-	console.log("Verify: " + expected + " " + actual);
-	if (actual != expected) {
-		throw Error("----- FAILED -----\nVerify Failed\nExpected: " + expected + "\nActual: " + actual);
-	}
-}
 
 const asmPath = localSettings.ScriptRoot + "TestLibrary1.dll";
 console.log("Loading " + asmPath);
@@ -164,11 +160,7 @@ try {
 io.ToString();
 VERIFY_IS_EQUAL(objectNotFound, true);
 
-console.log("####################################");
-console.log("####################################");
-console.log("             SUCCESS");
-console.log("####################################");
-console.log("####################################");
+Test.DECLARE_SUCCESS();
 console.log("[*] Unloading...");
 System.Threading.Thread.Sleep(1000);
 System.Diagnostics.Process.GetCurrentProcess().Kill();

@@ -3,6 +3,9 @@
 // GOAL: Run code on WinRT UI thread, intercept app going fullscreen and undo it.
 
 global.COMDebug = true;
+const Test = require('../common/testutils');
+const VERIFY_IS_EQUAL = Test.VERIFY_IS_EQUAL;
+const VERIFY_IS_NOTNULL = Test.VERIFY_IS_NOTNULL;
 
 const COM = require("../common/com");
 const WinRT = require("../common/winrt");
@@ -81,10 +84,10 @@ RunOnXAMLUIThread(function () {
     console.log("[*] Locating main window....");
     var coreWindow = GetMainXamlWindow();
     
-    console.log("##" + coreWindow.GetIids());
-    console.log("##" + coreWindow.GetRuntimeClassName());
-    console.log("##" + coreWindow.GetTrustLevel());
-    
+    VERIFY_IS_NOTNULL(coreWindow.GetIids());
+    VERIFY_IS_EQUAL(coreWindow.GetRuntimeClassName(), "Windows.UI.Core.CoreWindow");
+    VERIFY_IS_EQUAL(coreWindow.GetTrustLevel(), "BaseTrust");
+
     var appViewStatics = WinRT.GetActivationFactory("Windows.UI.ViewManagement.ApplicationView", IApplicationViewStatics2);
     var appView = new COM.Pointer(IApplicationView);
     COM.ThrowIfFailed(appViewStatics.GetForCurrentView(appView.GetAddressOf()));
@@ -110,9 +113,7 @@ RunOnXAMLUIThread(function () {
                         console.log("[*] Calling ExitFullScreenMode");
                         COM.ThrowIfFailed(appView3.ExitFullScreenMode());
 
-                        console.log("#######################");
-                        console.log("         SUCCESS       ");
-                        console.log("#######################");
+                        Test.DECLARE_SUCCESS();
                     });
                 }, 250); // need a short delay otherwise the app doesn't transition.
             } else {

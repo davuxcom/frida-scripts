@@ -86,7 +86,7 @@ function iunknown_ptr(address, idl) {
 
         this.Invoke = function (ordinal, paramTypes, params, tagName) {
             if (address == 0x0) { throw Error("Can't invoke method on null pointer"); }
-            //console.log("com_ptr(" + address + ")->" + tagName + " (" + params + ")");
+            console.log("com_ptr(" + address + ")->" + tagName + " (" + params + ")");
             // Add 'this' as first argument
             var localTypes = paramTypes.slice();
             localTypes.unshift('pointer');
@@ -216,6 +216,10 @@ function RuntimeComObject(iid) {
 
         var com_object_pointer = new Struct({ 'value': 'pointer' });
         com_object_pointer.value = vTable;
+        
+        // Avoid garbage collection:
+        this.savedvTable = vTable;
+        this.savedAddress = com_object_pointer;
         return com_object_pointer.Get();
     };
 

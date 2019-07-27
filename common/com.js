@@ -3,6 +3,7 @@
 const Struct = require('./struct');
 const GUID = require('./guid');
 const Win32 = require('./win32');
+const HSTRING = require('./hstring');
 
 var S_OK = 0;
 var S_FALSE = 1;
@@ -22,7 +23,6 @@ function ThrowIfFailed(hr) {
                        ['E_OUTOFMEMORY', 0x8007000E],
                        ['E_POINTER', 0x80004003],
                        ['E_UNEXPECTED', 0x8000FFFF]];
-    
     if (Failed(hr)) {
         var friendlyStr = "";
         for (var i = 0; i < HRESULTMap.length; ++i) {
@@ -127,7 +127,7 @@ function iunknown_ptr(address, idl) {
     this.GetRuntimeClassName = function () {
         var class_name_ptr = new Struct({ 'value': 'pointer' });
         if (Succeeded(vtable.Invoke(IInspectable.GetRuntimeClassName[0], IInspectable.GetRuntimeClassName[1], [class_name_ptr.Get()], "GetRuntimeClassName"))) {
-            return WinRT.HSTRING.read(class_name_ptr.value);
+            return HSTRING.read(class_name_ptr.value);
         } else {
             return "[GetRuntimeClassName Failed]";
         }

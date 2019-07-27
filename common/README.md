@@ -32,6 +32,18 @@ CLRDebug.EnableTraceListener();
 ### Win32.Abi
 Returns `win64` or `stdcall`.
 
+### Win32.FindHiddenExport
+Locate an export using GetProcAddress.
+```js
+var ComBase = {
+    RoInitialize: new NativeFunction(
+        Win32.FindHiddenExport("combase.dll", 
+                               "RoInitialize"), 
+                               'uint', 
+                               ['uint'], Win32.Abi),
+};
+```
+
 ## guid.js
 Read and write GUID data:
 ```js

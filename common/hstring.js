@@ -1,5 +1,4 @@
 const Struct = require('./struct');
-const COM = require('./com');
 const Win32 = require('./win32');
 
 var ComBase = {
@@ -11,7 +10,7 @@ var ComBase = {
 module.exports = {
     alloc: function (str) {
         var ret = new Struct({ 'value': 'pointer' });
-        COM.ThrowIfFailed(ComBase.WindowsCreateString(Memory.allocUtf16String(str), str.length, ret.Get()));
+        ComBase.WindowsCreateString(Memory.allocUtf16String(str), str.length, ret.Get());
         return ret.value;
     },
     read: function (hstring) { return Memory.readUtf16String(ComBase.WindowsGetStringRawBuffer(hstring, NULL)); },

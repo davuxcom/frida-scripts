@@ -80,16 +80,21 @@ WinRT.Initialize();
 RunOnXAMLUIThread(function () {
     console.log("[*] Locating main window....");
     var coreWindow = GetMainXamlWindow();
+    
+    console.log("##" + coreWindow.GetIids());
+    console.log("##" + coreWindow.GetRuntimeClassName());
+    console.log("##" + coreWindow.GetTrustLevel());
+    
     var appViewStatics = WinRT.GetActivationFactory("Windows.UI.ViewManagement.ApplicationView", IApplicationViewStatics2);
     var appView = new COM.Pointer(IApplicationView);
     COM.ThrowIfFailed(appViewStatics.GetForCurrentView(appView.GetAddressOf()));
     
     console.log("[*] Attaching event handlers");
     var appView2 = appView.As(IApplicationView2);
-    //var token = new WinRT.EventRegistrationToken();
-    //COM.ThrowIfFailed(appView2.add_VisibleBoundsChanged(new WinRT.TypedEventHandler((s, e) => {
-    //    console.log("VisibleBoundschnaged " + e);
-    //}, "00c1f983-c836-565c-8bbf-7053055bdb4c"), token.Get()));
+    var token = new WinRT.EventRegistrationToken();
+    COM.ThrowIfFailed(appView2.add_VisibleBoundsChanged(new WinRT.TypedEventHandler(function(s, e) {
+        console.log("VisibleBoundschnaged " + e);
+    }, "00c1f983-c836-565c-8bbf-7053055bdb4c"), token.Get()));
     
     var appView3 = appView.As(IApplicationView3);
     Interceptor.attach(appView3.TryEnterFullScreenMode.GetAddressOf(), {

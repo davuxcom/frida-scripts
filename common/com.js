@@ -98,7 +98,7 @@ function iunknown_ptr(address, idl) {
             return count;
         }
         return ordinal + (idl.IInspectable ? countMethods(IInspectable) : countMethods(IUnknown));
-    };
+    }
 
     this.InvokeMethod = function (ordinal, paramTypes, params, tagName) {
         return vtable.Invoke(calculateOrdinal(ordinal), paramTypes, params, tagName);
@@ -108,22 +108,21 @@ function iunknown_ptr(address, idl) {
     }
 
     // IUnknown
-    this.QueryInterface = function (iid, ppv) { return vtable.Invoke(IUnknown.QueryInterface[0], IUnknown.QueryInterface[1], [iid, ppv], "QueryInterface"); };
-    this.AddRef = function () { return vtable.Invoke(IUnknown.AddRef[0], IUnknown.AddRef[1], [], "AddRef"); };
-    this.Release = function () { return vtable.Invoke(IUnknown.Release[0], IUnknown.Release[1], [], "Release"); };
+    this.QueryInterface = function (iid, ppv) { return vtable.Invoke(IUnknown.QueryInterface[0], IUnknown.QueryInterface[1], [iid, ppv], "QueryInterface"); }
+    this.AddRef = function () { return vtable.Invoke(IUnknown.AddRef[0], IUnknown.AddRef[1], [], "AddRef"); }
+    this.Release = function () { return vtable.Invoke(IUnknown.Release[0], IUnknown.Release[1], [], "Release"); }
 
     // IInspectable
     this.GetIids = function () {
-        var size_ptr = new Struct({ 'value': 'pointer' });
-        var iids_ptr = new Struct({ 'value': 'pointer' });
+        var size_ptr = new Struct({value: 'uint'});
+        var iids_ptr = new Struct({value: 'pointer'});
         ThrowIfFailed(vtable.Invoke(IInspectable.GetIids[0], IInspectable.GetIids[1], [size_ptr.Get(), iids_ptr.Get()], "GetIids"));
-        var size = Memory.readUInt(size_ptr.value);
         var ret = [];
-        for (var i = 0; i < size; ++i) {
-            ret.push(GUID.read(iids_ptr.value.add(i * Process.pointerSize)));
+        for (var i = 0; i < size_ptr.value; ++i) {
+          ret.push(GUID.read(iids_ptr.value.add(i * Process.pointerSize)));
         }
         return ret;
-    };
+    }
     this.GetRuntimeClassName = function () {
         var class_name_ptr = new Struct({ 'value': 'pointer' });
         if (Succeeded(vtable.Invoke(IInspectable.GetRuntimeClassName[0], IInspectable.GetRuntimeClassName[1], [class_name_ptr.Get()], "GetRuntimeClassName"))) {
@@ -135,8 +134,7 @@ function iunknown_ptr(address, idl) {
     this.GetTrustLevel = function () {
         var trust_ptr = new Struct({ 'value': 'pointer' });
         ThrowIfFailed(vtable.Invoke(IInspectable.GetTrustLevel[0], IInspectable.GetTrustLevel[1], [trust_ptr.Get()], "GetTrustLevel"));
-        var trust_level = Memory.readUInt(trust_ptr.value);
-        return trust_level == 0 ? "BaseTrust" : trust_level == 1 ? "PartialTrust" : "FullTrust";
+        return trust_ptr.value == 0 ? "BaseTrust" : trust_ptr.value == 1 ? "PartialTrust" : "FullTrust";
     }
 }
 
@@ -158,10 +156,12 @@ function com_ptr(idl) {
         _ptr.value = addr;
         return this;
     }
-
+    this.GetIids = function() { return resolve_ptr().GetIids(); }
+    this.GetRuntimeClassName = function() { return resolve_ptr().GetRuntimeClassName(); }
+    this.GetTrustLevel = function() { return resolve_ptr().GetTrustLevel(); }
     this.toString = function () {
-        var iinspectable_extra = idl == IInspectable && (_ptr.value != 0x0) ?
-            " " + resolve_ptr().GetRuntimeClassName() + " IInspectable" + resolve_ptr().GetIids() + " " + resolve_ptr().GetTrustLevel() : "";
+        var iinspectable_extra = idl.IInspectable && (_ptr.value != 0x0) ?
+            " " + resolve_ptr().GetRuntimeClassName() + " ids=" + resolve_ptr().GetIids() + " " + resolve_ptr().GetTrustLevel() : "";
         return "[com_ptr " + _ptr.Get() + iinspectable_extra + "]";
     }
 

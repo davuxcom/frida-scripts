@@ -213,7 +213,6 @@ function CreateClrTypeWrapperFromInfo(typeInfo) {
 
     ConstructorFunction.$Clr_IsClrType = true;
     ConstructorFunction.$Clr_TypeOf = function () { return GetTypeByName(typeInfo.TypeName); }
-    ConstructorFunction.$Clr_TypeInfo = typeInfo;
     ConstructorFunction.$Clr_Invoke = function (method, args, genericTypes, returnBoxed) {
         return BridgeExports.InvokeMethod(null, typeInfo, method, args, genericTypes, returnBoxed);
     };
@@ -239,7 +238,6 @@ function CreateClrTypeWrapper(typeName, objHandle) {
 function ClrObjectWrapper(objHandle) {
     var typeInfo = BridgeExports.DescribeObject(NULL, objHandle);
     this.$Clr_IsClrObject = true;
-    this.$Clr_TypeInfo = typeInfo;
     this.$Clr_Handle = objHandle;
     this.$Clr_Invoke = function (method, args, genericTypes, returnBoxed) {
         return BridgeExports.InvokeMethod(objHandle, typeInfo, method, args, genericTypes, returnBoxed);
@@ -305,8 +303,6 @@ function JsonDelegate(func) {
 
 function GetNamespace(namespaceName) {
     return new function() {
-        var namespaceInfo = BridgeExports.DescribeNamespace(namespaceName);
-        this.$Clr_TypeInfo = namespaceInfo;
         function CreateProperty(self, leafName, isType, callback) {
             try {
                 var is_mangled = false;
@@ -325,6 +321,7 @@ function GetNamespace(namespaceName) {
             }
         }
 
+        var namespaceInfo = BridgeExports.DescribeNamespace(namespaceName);
         for (var i = 0; i < namespaceInfo.length; ++i) {
             CreateProperty(this, namespaceInfo[i].Name, namespaceInfo[i].IsType,
                 function (leafName, isType, isMangled) {

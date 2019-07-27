@@ -45,7 +45,7 @@ At this point as long as no errors are present in the output, the script is atta
 - The [Frida](https://www.frida.re/docs/home/) console has commands and features, but we don't need to use it for scripts here.
 - You can also launch and attach to processes using other methods.
 
-## Script: Replace SHBrowseForFolder with IFileDialog
+## Script: Replace SHBrowseForFolder with IFileDialog (COM)
 [Fix-SHBrowseForFolder](./Fix-SHBrowseForFolder) replaces the legacy folder dialog with the modern new dialog, enabling path entry.
 
 ![Legacy SHBrowseForFolder IFileDialog selection dialog](./Fix-SHBrowseForFolder/gfx/dialogs.png)
@@ -54,24 +54,34 @@ At this point as long as no errors are present in the output, the script is atta
 
 #### [View and install Fix-SHBrowseForFolder script](./Fix-SHBrowseForFolder)
 
-## Script: Assign a unique taskbar identity
+## Script: Assign a unique taskbar identity (.NET & COM)
 Group a specific window differently on the taskbar by assigning a unique identity:
 
 ![Taskbar showing two notepad buttons](./Fix-TaskbarIdentity/gfx/taskbar.png)
 
 #### [View and install Fix-TaskbarIdentity script](./Fix-TaskbarIdentity)
 
+## Script: Un-fullscreen XboxApp (WinRT)
+Undo fullscreen when a modern app attempts to enter fullscreen mode.  Hook WinRT API.
+
+#### [View and install Fix-XboxAppGoesFullscreen script](./Fix-XboxAppGoesFullscreen)
+
 ## Test suite: Validate DotNetBridge
 Verify that DotNetBridge is working properly by exercising calling .net APIs from the system and a locally compiled library.
 
 #### [View and install Test-DotNetBridge script](./Test-DotNetBridge)
+
+## Test suite: Validate WinRT
+Verify WinRT APIs are working.
+
+#### [View and install Test-WinRT script](./Test-WinRT)
 
 ## Common scripts
 
 ### [Learn more about common scripts](./common)
 
 #### COM Example
-Define a COM interface:
+Define a COM or WinRT interface:
 ```js
 var CLSID_FileOpenDialog = GUID.alloc("DC1C5A9C-E88A-4dde-A5A1-60F82A20AEF7");
 var IFileDialog = new COM.Interface(COM.IUnknown, {

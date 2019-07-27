@@ -1,3 +1,5 @@
+"use strict";
+
 const Struct = require('./struct');
 const GUID = require('./guid');
 const Win32 = require('./win32');
@@ -15,12 +17,10 @@ var HRESULTMap = [
     ['E_UNEXPECTED', 0x8000FFFF],
 ];
 
-// COM global constants
 var S_OK = 0;
 var S_FALSE = 1;
 var E_NOINTERFACE = 0x80004002;
 
-// COM Flow control
 function Succeeded(hr) {
     var ret = parseInt(hr, 10);
     return ret == S_OK || ret == S_FALSE;
@@ -39,7 +39,6 @@ function ThrowIfFailed(hr) {
         }
         throw new Error('COMException 0x' + hr.toString(16) + friendlyStr);
     }
-    return hr;
 }
 
 var IUnknown = {
@@ -71,14 +70,10 @@ var Ole32 = {
 };
 
 function ComInterface(baseInterface, methods, iid_str) {
-    for (var method in methods) {
-        this[method] = methods[method];
-    }
+    for (var method in methods) this[method] = methods[method];
 
     this.IID = GUID.alloc(iid_str);
-    if (baseInterface.IID == IInspectable.IID) {
-        this.IInspectable = true;
-    }
+    if (baseInterface.IID == IInspectable.IID) this.IInspectable = true;
 }
 
 function iunknown_ptr(address, idl) {

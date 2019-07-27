@@ -3,9 +3,9 @@ const COM = require('./com');
 const Win32 = require('./win32');
 
 var ComBase = {
-    WindowsCreateString: new NativeFunction(FindHiddenExport("combase.dll", "WindowsCreateString"), 'uint', ['pointer', 'uint', 'pointer'], Win32.Abi),
-    WindowsDeleteString: new NativeFunction(FindHiddenExport("combase.dll", "WindowsDeleteString"), 'uint', ['pointer'], Win32.Abi),
-    WindowsGetStringRawBuffer: new NativeFunction(FindHiddenExport("combase.dll", "WindowsGetStringRawBuffer"), 'pointer', ['pointer', 'pointer'], Win32.Abi),
+    WindowsCreateString: new NativeFunction(Win32.FindHiddenExport("combase.dll", "WindowsCreateString"), 'uint', ['pointer', 'uint', 'pointer'], Win32.Abi),
+    WindowsDeleteString: new NativeFunction(Win32.FindHiddenExport("combase.dll", "WindowsDeleteString"), 'uint', ['pointer'], Win32.Abi),
+    WindowsGetStringRawBuffer: new NativeFunction(Win32.FindHiddenExport("combase.dll", "WindowsGetStringRawBuffer"), 'pointer', ['pointer', 'pointer'], Win32.Abi),
 };
 
 module.exports = {

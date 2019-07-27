@@ -2,25 +2,16 @@ const Struct = require('./struct');
 const GUID = require('./guid');
 const HSTRING = require('./hstring');
 const Win32 = require('./win32');
-
-function FindHiddenExport(moduleName, procName) {
-    var Kernel32 = {
-        LoadLibrary: new NativeFunction(Module.findExportByName("kernel32.dll", "LoadLibraryW"), 'pointer', ['pointer'], Win32.Abi),
-        GetProcAddress: new NativeFunction(Module.findExportByName("kernel32.dll", "GetProcAddress"), 'pointer', ['pointer', 'pointer'], Win32.Abi),
-    };
-    var moduleAddr = Kernel32.LoadLibrary(Memory.allocUtf16String(moduleName));
-    if (moduleAddr == 0x0) { throw Error("Didn't load " + moduleName); }
-    return Kernel32.GetProcAddress(moduleAddr, Memory.allocAnsiString(procName));
-}
+const COM = require('./com');
 
 var ComBase = {
-    RoInitialize: new NativeFunction(FindHiddenExport("combase.dll", "RoInitialize"), 'uint', ['uint'], Win32.Abi),
-    RoActivateInstance: new NativeFunction(FindHiddenExport("combase.dll", "RoActivateInstance"), 'uint', ['pointer', 'pointer'], Win32.Abi),
-    RoGetActivationFactory: new NativeFunction(FindHiddenExport("combase.dll", "RoGetActivationFactory"), 'uint', ['pointer', 'pointer', 'pointer'], Win32.Abi),
+    RoInitialize: new NativeFunction(Win32.FindHiddenExport("combase.dll", "RoInitialize"), 'uint', ['uint'], Win32.Abi),
+    RoActivateInstance: new NativeFunction(Win32.FindHiddenExport("combase.dll", "RoActivateInstance"), 'uint', ['pointer', 'pointer'], Win32.Abi),
+    RoGetActivationFactory: new NativeFunction(Win32.FindHiddenExport("combase.dll", "RoGetActivationFactory"), 'uint', ['pointer', 'pointer', 'pointer'], Win32.Abi),
 };
 
 module.exports = {
-    Initialize: function () { ThrowIfFailed(ComBase.RoInitialize(1)); /*RO_INIT_MULTITHREADED*/ }, 
+    Initialize: function () { COM.ThrowIfFailed(ComBase.RoInitialize(1)); /*RO_INIT_MULTITHREADED*/ }, 
     ActivateInstance: function (activableClassId) {
         var ret = new COM.Pointer(COM.IInspectable);
         COM.ThrowIfFailed(ComBase.RoActivateInstance(HSTRING.alloc(activableClassId), ret.GetAddressOf()));

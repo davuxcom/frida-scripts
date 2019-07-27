@@ -7,6 +7,8 @@ global.COMDebug = true;
 const COM = require("../common/com");
 const WinRT = require("../common/winrt");
 
+// These interfaces are from the ABI variant, found in Windows Kits\10\Include\10.0.17763.0\winrt\windows.ui.core.h
+
 var ICoreImmersiveApplication = new COM.Interface(COM.IInspectable, {
     get_MainView: [2, ['pointer']],
 }, "1ADA0E3E-E4A2-4123-B451-DC96BF800419");
@@ -65,7 +67,6 @@ function RunOnXAMLUIThread(callback) {
 	var coreDispatcher = new COM.Pointer(ICoreDispatcher);
 	COM.ThrowIfFailed(coreWindow.get_Dispatcher(coreDispatcher.GetAddressOf()));
 
-	// Build a callback object.
 	var dispatcherFrame = new COM.RuntimeObject(IDispatchedHandler.IID);
 	// HRESULT IDispatchedHandler.Invoke(void);
 	dispatcherFrame.AddEntry(function (this_ptr) { callback(); return COM.S_OK; }, 'uint', ['pointer']);
@@ -73,43 +74,47 @@ function RunOnXAMLUIThread(callback) {
 	COM.ThrowIfFailed(coreDispatcher.RunAsync(CoreDispatcherPriority.Normal, dispatcherFrame.GetAddress(), Memory.alloc(Process.pointerSize)));
 }
 
-// main
-setTimeout(function() {
-    console.log("[*] Initializing....");
-	WinRT.Initialize();
-	
-	RunOnXAMLUIThread(function () {
+console.log("[*] Initializing WinRT....");
+WinRT.Initialize();
+
+RunOnXAMLUIThread(function () {
     console.log("[*] Locating main window....");
-        var coreWindow = GetMainXamlWindow();
-		var appViewStatics = WinRT.GetActivationFactory("Windows.UI.ViewManagement.ApplicationView", IApplicationViewStatics2);
-		var appView = new COM.Pointer(IApplicationView);
-		COM.ThrowIfFailed(appViewStatics.GetForCurrentView(appView.GetAddressOf()));
-		
-        var appView2 = appView.As(IApplicationView2);
-        //var token = new WinRT.EventRegistrationToken();
-        //COM.ThrowIfFailed(appView2.add_VisibleBoundsChanged(new WinRT.TypedEventHandler((s, e) => {
-        //    console.log("VisibleBoundschnaged " + e);
-        //}, "00c1f983-c836-565c-8bbf-7053055bdb4c"), token.Get()));
-        
-        var appView3 = appView.As(IApplicationView3);
-		Interceptor.attach(appView3.TryEnterFullScreenMode.GetAddressOf(), {
-			onLeave: function (retval) {
-                var VirtualKey_Control = 17;
-                var keyState = Memory.alloc(4);
-                COM.ThrowIfFailed(coreWindow.GetAsyncKeyState(VirtualKey_Control, keyState));
-                var keyStateValue = Memory.readInt(keyState);
-                if (keyStateValue == 0) {
-                    setTimeout(function() {
-                        RunOnXAMLUIThread(function () {
-                            COM.ThrowIfFailed(appView3.ExitFullScreenMode());
-                        });
-                    }, 250); // need a short delay otherwise the app doesn't transition.
-                } else {
-                    console.warn("Skipping fullscreen, CTRL is down.");
-                }
-			}
-		});
-		// For verification, toggle fullscreen
-		COM.ThrowIfFailed(appView3.TryEnterFullScreenMode(Memory.alloc(Process.pointerSize)));
-	});
-}, 2000); // Startup delay - avoid splash screen
+    var coreWindow = GetMainXamlWindow();
+    var appViewStatics = WinRT.GetActivationFactory("Windows.UI.ViewManagement.ApplicationView", IApplicationViewStatics2);
+    var appView = new COM.Pointer(IApplicationView);
+    COM.ThrowIfFailed(appViewStatics.GetForCurrentView(appView.GetAddressOf()));
+    
+    console.log("[*] Attaching event handlers");
+    var appView2 = appView.As(IApplicationView2);
+    //var token = new WinRT.EventRegistrationToken();
+    //COM.ThrowIfFailed(appView2.add_VisibleBoundsChanged(new WinRT.TypedEventHandler((s, e) => {
+    //    console.log("VisibleBoundschnaged " + e);
+    //}, "00c1f983-c836-565c-8bbf-7053055bdb4c"), token.Get()));
+    
+    var appView3 = appView.As(IApplicationView3);
+    Interceptor.attach(appView3.TryEnterFullScreenMode.GetAddressOf(), {
+        onLeave: function (retval) {
+            console.log("[*] IApplicationView3::TryEnterFullScreenMode OnLeave");
+            var VirtualKey_Control = 17;
+            var keyState = Memory.alloc(4);
+            COM.ThrowIfFailed(coreWindow.GetAsyncKeyState(VirtualKey_Control, keyState));
+            var keyStateValue = Memory.readInt(keyState);
+            if (keyStateValue == 0) {
+                setTimeout(function() {
+                    RunOnXAMLUIThread(function () {
+                        console.log("[*] Calling ExitFullScreenMode");
+                        COM.ThrowIfFailed(appView3.ExitFullScreenMode());
+
+                        console.log("#######################");
+                        console.log("         SUCCESS       ");
+                        console.log("#######################");
+                    });
+                }, 250); // need a short delay otherwise the app doesn't transition.
+            } else {
+                console.warn("Skipping fullscreen, CTRL is down.");
+            }
+        }
+    });
+    // For verification, toggle fullscreen
+    COM.ThrowIfFailed(appView3.TryEnterFullScreenMode(Memory.alloc(Process.pointerSize)));
+});

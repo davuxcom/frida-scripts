@@ -4,38 +4,29 @@ const Struct = require('./struct');
 const GUID = require('./guid');
 const Win32 = require('./win32');
 
-var HRESULTMap = [
-    ['E_ABORT', 0x80004004],
-    ['E_ACCESSDENIED', 0x80070005],
-    ['E_FAIL', 0x80004005],
-    ['E_HANDLE', 0x80070006],
-    ['E_INVALIDARG', 0x80070057],
-    ['E_NOINTERFACE', 0x80004002],
-    ['E_NOTIMPL', 0x80004001],
-    ['E_OUTOFMEMORY', 0x8007000E],
-    ['E_POINTER', 0x80004003],
-    ['E_UNEXPECTED', 0x8000FFFF],
-];
-
 var S_OK = 0;
 var S_FALSE = 1;
 var E_NOINTERFACE = 0x80004002;
 
-function Succeeded(hr) {
-    var ret = parseInt(hr, 10);
-    return ret == S_OK || ret == S_FALSE;
-}
-
+function Log(message) { if ("COMDebug" in global) console.log(message); }
+function Succeeded(hr) { return parseInt(hr, 10) == S_OK || parseInt(hr, 10) == S_FALSE; }
 function Failed(hr) { return !Succeeded(hr); }
-
 function ThrowIfFailed(hr) {
+    var HRESULTMap = [['E_ABORT', 0x80004004],
+                       ['E_ACCESSDENIED', 0x80070005],
+                       ['E_FAIL', 0x80004005],
+                       ['E_HANDLE', 0x80070006],
+                       ['E_INVALIDARG', 0x80070057],
+                       ['E_NOINTERFACE', 0x80004002],
+                       ['E_NOTIMPL', 0x80004001],
+                       ['E_OUTOFMEMORY', 0x8007000E],
+                       ['E_POINTER', 0x80004003],
+                       ['E_UNEXPECTED', 0x8000FFFF]];
+    
     if (Failed(hr)) {
         var friendlyStr = "";
         for (var i = 0; i < HRESULTMap.length; ++i) {
-            if (hr == HRESULTMap[i][1]) {
-                friendlyStr = " " + HRESULTMap[i][0];
-                break;
-            }
+            if (hr == HRESULTMap[i][1]) friendlyStr = " " + HRESULTMap[i][0];
         }
         throw new Error('COMException 0x' + hr.toString(16) + friendlyStr);
     }
@@ -86,7 +77,8 @@ function iunknown_ptr(address, idl) {
 
         this.Invoke = function (ordinal, paramTypes, params, tagName) {
             if (address == 0x0) { throw Error("Can't invoke method on null pointer"); }
-            console.log("com_ptr(" + address + ")->" + tagName + " (" + params + ")");
+            Log("com_ptr(" + address + ")->" + tagName + " (" + params + ")");
+            
             // Add 'this' as first argument
             var localTypes = paramTypes.slice();
             localTypes.unshift('pointer');
@@ -230,7 +222,7 @@ function RuntimeComObject(iid) {
             if (GUID.read(iids[i]) == find_guid) {
                 ++refCount;
                 Memory.writePointer(ppv, this_ptr);
-                //console.log("RuntimeComObject QueryInterface S_OK: " + find_guid);
+                Log("RuntimeComObject QueryInterface S_OK: " + find_guid);
                 return S_OK;
             }
         }

@@ -5,6 +5,8 @@ console.log("Begin");
 
 const localSettings = require('./local_settings');
 
+// Uncomment this line to enable warnings:
+//global.CLRDebug = true;
 const CLR = require('../common/DotNet');
 const System = CLR.GetNamespace("System");
 

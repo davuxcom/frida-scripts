@@ -8,7 +8,7 @@ const localSettings = require('./local_settings');
 // Uncomment this line to enable warnings:
 //global.CLRDebug = true;
 const CLR = require('../common/DotNet');
-const System = CLR.GetNamespace("System");
+const System = new CLR.Namespace("System");
 
 const CLRDebug = require('../common/DotNet-debug');
 CLRDebug.EnableTraceListener();
@@ -27,7 +27,7 @@ function VERIFY_IS_EQUAL(expected, actual) {
 const asmPath = localSettings.ScriptRoot + "TestLibrary1.dll";
 console.log("Loading " + asmPath);
 System.Reflection.Assembly.LoadFile(asmPath);
-const TestLibrary1 = CLR.GetNamespace("TestLibrary1");
+const TestLibrary1 = new CLR.Namespace("TestLibrary1");
 
 // Method
 VERIFY_IS_EQUAL(TestLibrary1.Test1.TestMethod(), "TestMethod");
@@ -137,7 +137,7 @@ var arr = System.Array.CreateInstance(System.Byte, 10);
 // Verify that a boxed value can be used for byte, since otherwise we fail to downcast from int.
 arr.SetValue(System.Byte.Parse.Box("10"),0);
 
-var Registry = CLR.GetNamespace("Microsoft").Win32.Registry;
+var Registry = new CLR.Namespace("Microsoft").Win32.Registry;
 
 // Field
 var sn = Registry.CurrentUser.OpenSubKey("Software").GetSubKeyNames();

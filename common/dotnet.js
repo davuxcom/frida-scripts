@@ -22,19 +22,16 @@ var IDotNetBridge = new COM.Interface(COM.IUnknown, {
 
 function DotNetBridge() {
     console.log("[*] Creating DotNetBridge");
-    var bridge = COM.CreateInstance(CLSID_DotNetBridge, COM.ClassContext.InProc, IDotNetBridge);
+    const bridge = COM.CreateInstance(CLSID_DotNetBridge, COM.ClassContext.InProc, IDotNetBridge);
 
-    function ResolveArgs(params) {
+    function SerializedArgsToJson(params) {
         if (typeof params === 'undefined') { params = []; }
         if (Object.prototype.toString.call(params) === '[object Array]') {
             for (var i = 0; i < params.length; ++i) {
-                if (params[i] && params[i].$Clr_Serialize) {
-                    params[i] = params[i].$Clr_Serialize();
-                }
+                if (params[i] && params[i].$Clr_Serialize) params[i] = params[i].$Clr_Serialize();
             }
             return JSON.stringify(params);
-        }
-        else {
+        } else {
             throw new Error("Bad args " + params);
         }
     }
@@ -49,16 +46,14 @@ function DotNetBridge() {
 
         var ret = JSON.parse(Memory.readUtf16String(outPtr.value));
         if (ret && ret.__ERROR) { throw Error(ret.Message + "\n" + ret.Stack + "\n") }
-        else if (ret && ret.__OBJECT) { ret = new ClrObjectWrapper(ret); }
+        else if (ret && ret.__OBJECT) { ret = new ObjectWrapper(ret); }
         return ret;
     }
     
     this.CreateObject = function(typeInfo, args) {
-        if (typeInfo.IsDelegate) {
-            return DoCall("CreateDelegate", Memory.allocUtf16String(typeInfo.TypeName), JsonDelegate(args));
-        } else {
-            return DoCall("CreateObject", Memory.allocUtf16String(typeInfo.TypeName), Memory.allocUtf16String(ResolveArgs(args)));
-        }
+        return typeInfo.IsDelegate ? 
+            DoCall("CreateDelegate", Memory.allocUtf16String(typeInfo.TypeName), JsonDelegate(args)) :
+            DoCall("CreateObject", Memory.allocUtf16String(typeInfo.TypeName), Memory.allocUtf16String(SerializedArgsToJson(args)));
     }
     
     this.DescribeObject = function(typeName, objHandle) {
@@ -85,7 +80,7 @@ function DotNetBridge() {
             objHandle == null ? NULL : Memory.allocUtf16String(JSON.stringify(objHandle)), 
             Memory.allocUtf16String(typeInfo.TypeName), 
             Memory.allocUtf16String(method), 
-            Memory.allocUtf16String(ResolveArgs(args)),
+            Memory.allocUtf16String(SerializedArgsToJson(args)),
             genericTypes ? Memory.allocUtf16String(JSON.stringify(genericTypes.$Clr_Handle)) : NULL,
             returnBoxed ? 1 : 0);
     };
@@ -108,57 +103,41 @@ function JsonDelegate(func) {
         // Unpack json args and resolve object references.
         var args = JSON.parse(Memory.readUtf16String(argsPtr));
         for (var i = 0; i < args.length; ++i) {
-            if (args[i].__OBJECT) args[i] = new ClrObjectWrapper(args[i]);
+            if (args[i].__OBJECT) args[i] = new ObjectWrapper(args[i]);
         }
         
         var ret = func.apply(func, args);
         // Pack up the result into object references
         if (Object.prototype.toString.call(ret) === '[object Array]') {
             for (var i = 0; i < ret.length; ++i) {
-                if (ret[i].$Clr_Serialize) {
-                    ret[i] = ret[i].$Clr_Serialize();
-                }
+                if (ret[i].$Clr_Serialize) ret[i] = ret[i].$Clr_Serialize();
             }
         }
         if (ret) {
-            if (ret.$Clr_Serialize) {
-                ret = ret.$Clr_Serialize();
-            }
+            if (ret.$Clr_Serialize) ret = ret.$Clr_Serialize();
             return Memory.allocUtf16String(JSON.stringify(ret));;
         }
         return NULL;
     }, 'pointer', ['pointer'], Win32.Abi);
     
-    // If we don't do this, the GC is so quick it'll never be able to call back and AV.
+    // Save a pointer somewhere in javascript, the GC is so quick it'll clean up before we have a chance to call back.
     _pinnedNativeCallbackObjects.push(callback);
     return callback;
 }
 
-function GetTypeByName(typeName) {
-    var type = CreateClrTypeWrapper("System.Type").GetType(typeName);
-    if (type != null) return type;
-    var asm = CreateClrTypeWrapper("System").AppDomain.CurrentDomain.GetAssemblies();
-    var asmLength = asm.Length;
-    for (var i = 0; i < asmLength; i++) {
-        type = asm.GetValue(i).GetType(typeName);
-        if (type != null) { return type; }
-    }
-    return null;
-}
+function TypeInstance(typeName) { return new TypeWrapper("System.Type").GetType(typeName); }
 
 function ExposeMethodsFromType(self, typeInfo) {
     function CreateMethod(self, method) {
         var invokeMethod = function () { return self.$Clr_Invoke(method.Name, Array.prototype.slice.call(arguments, 0)); };
+        invokeMethod.Box = function () { return self.$Clr_Invoke(method.Name, Array.prototype.slice.call(arguments, 0), null, true); };
         invokeMethod.Of = function () {
-            var genericTypes = CreateClrTypeWrapper("System.Array").CreateInstance(GetTypeByName("System.Type"), arguments.length);
+            var genericTypes = new TypeWrapper("System.Array").CreateInstance(new TypeInstance("System.Type"), arguments.length);
             for (var i = 0; i < arguments.length; ++i) { genericTypes.SetValue(arguments[i].$Clr_TypeOf(), i); }
             
             var invokeGenericMethod = function () { return self.$Clr_Invoke(method.Name, Array.prototype.slice.call(arguments, 0), genericTypes); }
             invokeGenericMethod.Box = function () { return self.$Clr_Invoke(method.Name, Array.prototype.slice.call(arguments, 0), genericTypes, true); }
             return invokeGenericMethod;
-        };
-        invokeMethod.Box = function () {
-            return self.$Clr_Invoke(method.Name, Array.prototype.slice.call(arguments, 0), null, true);
         };
         // Wire get_ and set_ to a property get/set.
         if ((method.Name.startsWith("get_") && method.Parameters.length == 0) || (method.Name.startsWith("set_") && method.Parameters.length == 1)) {
@@ -177,18 +156,18 @@ function ExposeMethodsFromType(self, typeInfo) {
                     return new function () {
                         this.add = function (delegate) {
                             self.$Clr_Invoke("add_" + shortMethodName, [delegate]);
-                            return delegate;
+                            return delegate; // delegate.toString() will act as a token for removal.
                         };
                         this.remove = function (delegate) {
                             // token = obj += delegate ... token is delegate.toString which is JSON by convention.
-                            if (typeof delegate == "string") { delegate = new ClrObjectWrapper(JSON.parse(delegate)); }
+                            if (typeof delegate == "string") { delegate = new ObjectWrapper(JSON.parse(delegate)); }
                             return self.$Clr_Invoke("remove_" + shortMethodName, [delegate]);
                         };
                         // This makes it "" + other.toString() in the setter below when doing "handler += other"
                         this.toString = function () { return ""; }
                     }
                 },
-                set: function (objHandle_string) { self.$Clr_Invoke("add_" + shortMethodName, [new ClrObjectWrapper(JSON.parse(objHandle_string))]); },
+                set: function (objHandle_string) { self.$Clr_Invoke("add_" + shortMethodName, [new ObjectWrapper(JSON.parse(objHandle_string))]); },
             });
         } else {
             self[method.Name] = invokeMethod;
@@ -206,12 +185,17 @@ function ExposeMethodsFromType(self, typeInfo) {
     for (var i = 0; typeInfo.Fields && i < typeInfo.Fields.length; ++i) { ExposeField(self, typeInfo.Fields[i]); }
 }
 
-function CreateClrTypeWrapperFromInfo(typeInfo) {
+function TypeWrapper(typeNameOrTypeInfo) {
+    var typeInfo = typeNameOrTypeInfo;
+    if (typeof typeNameOrTypeInfo == "string") {
+        typeInfo = BridgeExports.DescribeObject(typeNameOrTypeInfo, null);
+    }
+    
     function ExposeNestedTypesFromType(self, typeInfo) {
         function CreateValue(self, name) {
             try {
                 var shortName = name.replace(typeInfo.TypeName + "+", "");
-                Object.defineProperty(self, shortName, { get: function () { return CreateClrTypeWrapper(name); }});
+                Object.defineProperty(self, shortName, { get: function () { return new TypeWrapper(name); }});
             } catch (e) { Warn("Can't define " + name); }
         }
 
@@ -221,16 +205,16 @@ function CreateClrTypeWrapperFromInfo(typeInfo) {
     var ConstructorFunction = function () { return BridgeExports.CreateObject(typeInfo, typeInfo.IsDelegate ? arguments[0] : Array.prototype.slice.call(arguments)); };
     ConstructorFunction.toString = function () { return "[ClrType " + typeInfo.TypeName + "]"; }
     ConstructorFunction.$Clr_Serialize = function() { return ConstructorFunction.$Clr_TypeOf().$Clr_Handle; }
-    ConstructorFunction.$Clr_TypeOf = function () { return GetTypeByName(typeInfo.TypeName); }
+    ConstructorFunction.$Clr_TypeOf = function () { return new TypeInstance(typeInfo.TypeName); }
     ConstructorFunction.$Clr_Invoke = function (method, args, genericTypes, returnBoxed) {
         return BridgeExports.InvokeMethod(null, typeInfo, method, args, genericTypes, returnBoxed);
     }
     // Dictionary<int,string> -> Dictionary.Of(System.Int, System.String)
     ConstructorFunction.Of = function () {
-        var genericTypes = CreateClrTypeWrapper("System.Array").CreateInstance(GetTypeByName("System.Type"), arguments.length);
+        var genericTypes = new TypeWrapper("System.Array").CreateInstance(new TypeInstance("System.Type"), arguments.length);
         for (var i = 0; i < arguments.length; ++i) { genericTypes.SetValue(arguments[i].$Clr_TypeOf(), i); }
-        var genericType = CreateClrTypeWrapper(typeInfo.TypeName + "`" + arguments.length).$Clr_TypeOf().MakeGenericType(genericTypes);
-        return CreateClrTypeWrapper(genericType.FullName);
+        var genericType = new TypeWrapper(typeInfo.TypeName + "`" + arguments.length).$Clr_TypeOf().MakeGenericType(genericTypes);
+        return new TypeWrapper(genericType.FullName);
     }
 
     ExposeMethodsFromType(ConstructorFunction, typeInfo);
@@ -238,11 +222,7 @@ function CreateClrTypeWrapperFromInfo(typeInfo) {
     return ConstructorFunction;
 }
 
-function CreateClrTypeWrapper(typeName, objHandle) {
-    return CreateClrTypeWrapperFromInfo(BridgeExports.DescribeObject(typeName, objHandle));
-}
-
-function ClrObjectWrapper(objHandle) {
+function ObjectWrapper(objHandle) {
     var typeInfo = BridgeExports.DescribeObject(NULL, objHandle);
     this.$Clr_Serialize = function() { return objHandle; }
     this.$Clr_Handle = objHandle;
@@ -262,42 +242,40 @@ function ClrObjectWrapper(objHandle) {
     _objects.push(this);
 }
 
-function GetNamespace(namespaceName) {
-    return new function() {
-        function CreateProperty(self, leafName, isType, callback) {
-            try {
-                var isSimplifiedName = leafName.indexOf("`") > -1;
-                var simpleLeafName = isSimplifiedName ? leafName.substring(0, leafName.indexOf("`")) : leafName;
-                Object.defineProperty(self, simpleLeafName, { get: function () { return callback(simpleLeafName, isType, isSimplifiedName); }});
-            } catch (e) { Warn("couldn't define " + leafName + " on " + namespaceName + ":\n" + e); }
-        }
-
-        var namespaceInfo = BridgeExports.DescribeNamespace(namespaceName);
-        for (var i = 0; i < namespaceInfo.length; ++i) {
-            CreateProperty(this, namespaceInfo[i].Name, namespaceInfo[i].IsType,
-                function (leafName, isType, isMangled) {
-                    var fullName = namespaceName + "." + leafName;
-                    if (isType) {
-                        if (isMangled) {
-                            // PROBLEM: Given Func`1, Func *may not* exist.
-                            try {
-                                return CreateClrTypeWrapper(fullName);
-                            } catch (e) {
-                                // SOLUTION: Give back an object to call .Of() on.
-                                return CreateClrTypeWrapperFromInfo({ TypeName: fullName });
-                            }
+function NamespaceWrapper(namespaceName) {
+    function CreateProperty(self, leafName, isType, callback) {
+        try {
+            var isSimplifiedName = leafName.indexOf("`") > -1;
+            var simpleLeafName = isSimplifiedName ? leafName.substring(0, leafName.indexOf("`")) : leafName;
+            Object.defineProperty(self, simpleLeafName, { get: function () { return callback(simpleLeafName, isType, isSimplifiedName); }});
+        } catch (e) { Warn("Couldn't define " + leafName + " on " + namespaceName + ":\n" + e); }
+    }
+    
+    var namespaceInfo = BridgeExports.DescribeNamespace(namespaceName);
+    for (var i = 0; i < namespaceInfo.length; ++i) {
+        CreateProperty(this, namespaceInfo[i].Name, namespaceInfo[i].IsType,
+            function (leafName, isType, isMangled) {
+                var fullName = namespaceName + "." + leafName;
+                if (isType) {
+                    if (isMangled) {
+                        // PROBLEM: Given Func`1, Func *may not* exist.
+                        try {
+                            return new TypeWrapper(fullName);
+                        } catch (e) {
+                            // SOLUTION: Give back an object for the sole purpose of calling .Of() on to access Func`1 and so on.
+                            return new TypeWrapper({ TypeName: fullName });
                         }
-                        return CreateClrTypeWrapper(fullName);
-                    } else {
-                        return GetNamespace(fullName);
                     }
-                });
-        }
+                    return new TypeWrapper(fullName);
+                } else {
+                    return new NamespaceWrapper(fullName);
+                }
+            });
     }
 }
 
 module.exports = {
-    GetNamespace: GetNamespace,
+    Namespace: NamespaceWrapper,
     Prune: function () { // Enable .net GC to clean up objects (remove reference in js and in .net).
         var outstanding = _objects.length;
         for (var i = outstanding - 1; i > -1; --i) BridgeExports.ReleaseObject(_objects[i].$Clr_Handle);

@@ -100,6 +100,8 @@ COM.ThrowIfFailed(SHGetIDListFromObject(shellItem.Get(), pidl));
 #### DotNet Example
 Call .NET APIs directly from javascript.
 ```js
+const CLR = require("../common/dotnet");
+const System = new CLR.Namespace("System");
 System.IO.File.WriteAllText(path, "log data");
 ```
 

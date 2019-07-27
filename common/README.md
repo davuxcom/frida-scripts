@@ -7,7 +7,7 @@ Calls the DotNetBridge.dll COM component registered on the machine and exposes n
 ### Example
 ```js
 const CLR = require("../common/dotnet");
-const System = CLR.GetNamespace("System");
+const System = new CLR.Namespace("System");
 
 // and then call any API like so:
 System.Threading.Thread.Sleep(1000);
@@ -22,8 +22,9 @@ var eventToken = System.AppDomain.CurrentDomain.AssemblyLoad += new System.Assem
 #### [More examples: Test-DotNetBridge.js](../Test-DotNetBridge/Test-DotNetBridge.js)
 
 ## dotnet-debug.js
-Connect `Trace.WriteLine()` to `console.log()` for debugging purposes:
+Connect `Trace.WriteLine()` to write to `console.log()` for debugging purposes:
 ```js
+const CLRDebug = require('../common/DotNet-debug');
 CLRDebug.EnableTraceListener();
 ```
 

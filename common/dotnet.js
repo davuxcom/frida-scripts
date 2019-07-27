@@ -140,16 +140,18 @@ function ExposeMethodsFromType(self, typeInfo) {
             return invokeGenericMethod;
         };
         // Wire get_ and set_ to a property get/set.
-        if ((method.Name.startsWith("get_") && method.Parameters.length == 0) || (method.Name.startsWith("set_") && method.Parameters.length == 1)) {
+        if ((method.Name.startsWith("get_") && method.Parameters.length == 0) || 
+            (method.Name.startsWith("set_") && method.Parameters.length == 1)) {
             try {
                 var shortMethodName = method.Name.slice("get_".length);
                 Object.defineProperty(self, shortMethodName, {
                     get: function () { return self.$Clr_Invoke("get_" + shortMethodName, []); },
                     set: function (newValue) { return self.$Clr_Invoke("set_" + shortMethodName, [newValue]); },
                 });
-            } catch (e) { Warn("Can't overwrite reserved keyword " + shortMethodName + "\n" + e); } 
+            } catch (e) { Warn("Can't define '" + shortMethodName + "': " + e); } 
         // wire add_ and remove_ to an event registration object.
-        } else if ((method.Name.startsWith("add_") && method.Parameters && method.Parameters.length == 1) || (method.Name.startsWith("remove_") && method.Parameters && method.Parameters.length == 1)) {
+        } else if ((method.Name.startsWith("add_") && method.Parameters && method.Parameters.length == 1) || 
+                    (method.Name.startsWith("remove_") && method.Parameters && method.Parameters.length == 1)) {
             var shortMethodName = method.Name.substring(method.Name.startsWith("add_") ? "add_".length : "remove_".length)
             if (!self[shortMethodName]) Object.defineProperty(self, shortMethodName, {
                 get: function () {
@@ -257,16 +259,15 @@ function NamespaceWrapper(namespaceName) {
             function (leafName, isType, isMangled) {
                 var fullName = namespaceName + "." + leafName;
                 if (isType) {
-                    if (isMangled) {
-                        // PROBLEM: Given Func`1, Func *may not* exist.
-                        try {
-                            return new TypeWrapper(fullName);
-                        } catch (e) {
+                    try {
+                        return new TypeWrapper(fullName);
+                    } catch (e) {
+                        if (isMangled) {
+                            // PROBLEM: Given Func`1, Func *may not* exist.
                             // SOLUTION: Give back an object for the sole purpose of calling .Of() on to access Func`1 and so on.
                             return new TypeWrapper({ TypeName: fullName });
-                        }
+                        } else throw e;
                     }
-                    return new TypeWrapper(fullName);
                 } else {
                     return new NamespaceWrapper(fullName);
                 }

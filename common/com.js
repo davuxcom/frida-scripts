@@ -142,8 +142,6 @@ function com_ptr(idl) {
     var _ptr = new Struct({ 'value': 'pointer' }); // the real reference is here
 
     var resolve_ptr = function () { return new iunknown_ptr(_ptr.value, idl); }
-    this.$ComPtr_Invoke = function (methodDfn, args) { return resolve_ptr().InvokeMethod(methodDfn[0], methodDfn[1], args, "$ComPtr_Invoke"); };
-    this.$ComPtr_GetMethodAddress = function (methodDfn) { return resolve_ptr().GetMethodAddress(methodDfn[0]); }
     this.Release = function () { return resolve_ptr().Release(); }
     this.GetAddressOf = function () { return _ptr.Get(); }
     this.Get = function () { return _ptr.value; }

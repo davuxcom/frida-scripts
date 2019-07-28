@@ -44,7 +44,7 @@ namespace DotNetBridge
             var delegateWrappedInstance = Activator.CreateInstance(typeof(Delegate_Wrapper<,,,,,,,,,,>).MakeGenericType(GenericTypes.ToArray()), new object[] { callback });
             var delegateWrappedMethod = delegateWrappedInstance.GetType().GetMethod(
                 (invokeMethod.ReturnType == typeof(void) ? "Action_" : "Func_") + invokeMethod.GetParameters().Length);
-            return delegateWrappedMethod.CreateDelegate(type, delegateWrappedInstance);
+            return MulticastDelegate.CreateDelegate(type, delegateWrappedInstance, delegateWrappedMethod);
         }
     }
 }

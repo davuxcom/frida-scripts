@@ -3,6 +3,9 @@
 
 console.log("Begin");
 
+//global.COMDebug = true;
+global.CLRDebug = true;
+
 const Test = require('../common/testutils');
 const VERIFY_IS_EQUAL = Test.VERIFY_IS_EQUAL;
 
@@ -14,11 +17,12 @@ const CLR = require('../common/DotNet');
 const System = new CLR.Namespace("System");
 
 const CLRDebug = require('../common/DotNet-debug');
-CLRDebug.EnableTraceListener();
+//CLRDebug.EnableTraceListener();
 
 // Wait for the background thread to start.
 System.Threading.Thread.Sleep(1000);
-System.Diagnostics.Trace.WriteLine("hello");
+
+//System.Diagnostics.Trace.WriteLine("hello");
 
 const asmPath = localSettings.ScriptRoot + "TestLibrary1.dll";
 console.log("Loading " + asmPath);
@@ -107,12 +111,12 @@ VERIFY_IS_EQUAL(fn4.Invoke(System.IO.FileInfo("file_test2.txt")), "file_test2.tx
 // Register
 var asmLoaded = false;
 var eventToken = System.AppDomain.CurrentDomain.AssemblyLoad += new System.AssemblyLoadEventHandler(function (s, e) { asmLoaded = true;});
-System.Reflection.Assembly.LoadWithPartialName("PresentationFramework");
+System.Reflection.Assembly.LoadWithPartialName("PresentationFramework, Version=4.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35");
 VERIFY_IS_EQUAL(asmLoaded, true);
 // Unregister
 System.AppDomain.CurrentDomain.AssemblyLoad.remove(eventToken);
 asmLoaded = false;
-System.Reflection.Assembly.LoadWithPartialName("System.Windows.Forms");
+System.Reflection.Assembly.LoadWithPartialName("System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089");
 VERIFY_IS_EQUAL(asmLoaded, false); // will have generated loads
 
 // Scenario test: thread

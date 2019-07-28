@@ -1,10 +1,9 @@
 "use strict";
 
-const Win32 = require('./win32');
-
+var Abi = Process.arch == 'x64' ? 'win64' : 'stdcall';
 var Ole32 = {
-    CLSIDFromString: new NativeFunction(Module.findExportByName("ole32.dll", "CLSIDFromString"), 'uint', ['pointer', 'pointer'], Win32.Abi),
-    StringFromGUID2: new NativeFunction(Module.findExportByName("ole32.dll", "StringFromGUID2"), 'int', ['pointer', 'pointer', 'int'], Win32.Abi),
+    CLSIDFromString: new NativeFunction(Module.findExportByName("ole32.dll", "CLSIDFromString"), 'uint', ['pointer', 'pointer'], Abi),
+    StringFromGUID2: new NativeFunction(Module.findExportByName("ole32.dll", "StringFromGUID2"), 'int', ['pointer', 'pointer', 'int'], Abi),
 };
 const GUID_SIZE_BYTES = 16;
 

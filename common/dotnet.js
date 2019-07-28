@@ -7,7 +7,8 @@ const Struct = require('./struct');
 const GUID = require('./guid');
 const COM = require('./com');
 
-function Warn(message) { if ("CLRDebug" in global) console.warn(message); }
+function Warn(message) { if ("CLRWarn" in global) console.warn(message); }
+function Log(message) { if ("CLRDebug" in global) console.log(message); }
 
 // InProc component that is expected to be found in the registry.
 var CLSID_DotNetBridge = GUID.alloc("ddb71722-f7e5-4c45-817e-cc1b84bfab4e");
@@ -18,11 +19,12 @@ var IDotNetBridge = new COM.Interface(COM.IUnknown, {
     InvokeMethod: [3, ['pointer', 'pointer', 'pointer', 'pointer', 'pointer', 'int', 'pointer']],
     ReleaseObject: [4, ['pointer', 'pointer']],
     DescribeNamespace: [5, ['pointer', 'pointer']],
+    SwitchToAppDomain: [6, ['pointer', 'pointer', 'pointer']],
 }, "ea688a1d-4be4-4cae-b2a3-9a389fcd1c8b");
 
 function DotNetBridge() {
     console.log("[*] Creating DotNetBridge");
-    const bridge = COM.CreateInstance(CLSID_DotNetBridge, COM.ClassContext.InProc, IDotNetBridge);
+    var bridge = COM.CreateInstance(CLSID_DotNetBridge, COM.ClassContext.InProc, IDotNetBridge);
 
     function SerializedArgsToJson(params) {
         if (typeof params === 'undefined') { params = []; }
@@ -48,6 +50,20 @@ function DotNetBridge() {
         if (ret && ret.__ERROR) { throw Error(ret.Message + "\n" + ret.Stack + "\n") }
         else if (ret && ret.__OBJECT) { ret = new ObjectWrapper(ret); }
         return ret;
+    }
+    
+    this.SwitchToAppDomain = function(targetDomainName, cb) {
+        var callback = new NativeCallback(function (argsPtr) {
+            console.log("[*] Got updated bridge: " + argsPtr);
+            bridge = new COM.Pointer(IDotNetBridge);
+            bridge.Attach(argsPtr);
+            cb();
+            return NULL;
+        }, 'pointer', ['pointer'], Win32.Abi);
+        
+        // Save a pointer somewhere in javascript, the GC is so quick it'll clean up before we have a chance to call back.
+        _pinnedNativeCallbackObjects.push(callback);
+        DoCall("SwitchToAppDomain", Memory.allocUtf16String(targetDomainName), callback);
     }
     
     this.CreateObject = function(typeInfo, args) {
@@ -76,6 +92,7 @@ function DotNetBridge() {
     }
     
     this.InvokeMethod = function (objHandle, typeInfo, method, args, genericTypes, returnBoxed) {
+        Log("InvokeMethod: " + method);
         return DoCall("InvokeMethod", 
             objHandle == null ? NULL : Memory.allocUtf16String(JSON.stringify(objHandle)), 
             Memory.allocUtf16String(typeInfo.TypeName), 
@@ -277,6 +294,13 @@ function NamespaceWrapper(namespaceName) {
 
 module.exports = {
     Namespace: NamespaceWrapper,
+    SwitchToAppDomain: function(targetDomainName, cb) { BridgeExports.SwitchToAppDomain(targetDomainName, cb); },
+    ListAppDomains: function() {
+        var domains = new NamespaceWrapper("DotNetBridge").AppDomainSwitcher.EnumAppDomains();
+        var ret = [];
+        for (var i = 0; i < domains.Count; i++) ret[ret.length] = domains.get_Item(i).FriendlyName;
+        return ret;
+    },
     Prune: function () { // Enable .net GC to clean up objects (remove reference in js and in .net).
         var outstanding = _objects.length;
         for (var i = outstanding - 1; i > -1; --i) BridgeExports.ReleaseObject(_objects[i].$Clr_Handle);

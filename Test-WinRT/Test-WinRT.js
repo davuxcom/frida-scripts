@@ -95,9 +95,11 @@ RunOnXAMLUIThread(function () {
     console.log("[*] Attaching event handlers");
     var appView2 = appView.As(IApplicationView2);
     var token = new WinRT.EventRegistrationToken();
+    /* Works but causes a crash after first time
     COM.ThrowIfFailed(appView2.add_VisibleBoundsChanged(new WinRT.TypedEventHandler(function(s, e) {
         console.log("VisibleBoundschnaged " + e);
     }, "00c1f983-c836-565c-8bbf-7053055bdb4c"), token.Get()));
+    */
     
     var appView3 = appView.As(IApplicationView3);
     Interceptor.attach(appView3.TryEnterFullScreenMode.GetAddressOf(), {

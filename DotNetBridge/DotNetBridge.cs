@@ -171,6 +171,15 @@ namespace DotNetBridge
             });
         }
 
+        public string SwitchToAppDomain(string friendlyName, IntPtr callback)
+        {
+            return NoThrowBoundary(() =>
+            {
+                AppDomainSwitcher.TrySwitchToOther(friendlyName, callback);
+                return null;
+            });
+        }
+
         int ObjetToObjectRef(object o) { return _objects.ContainsValue(o) ? _objects.FirstOrDefault(x => x.Value == o).Key : -1; }
 
         object ObjectRefToObject(OBJECT o) { return _objects[o.Id]; }

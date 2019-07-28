@@ -39,5 +39,10 @@ namespace DotNetBridge
         [return: MarshalAs(UnmanagedType.LPWStr)]
         string DescribeNamespace(
             [MarshalAs(UnmanagedType.LPWStr)]string nameSpace);
+
+        [return: MarshalAs(UnmanagedType.LPWStr)]
+        string SwitchToAppDomain(
+            [MarshalAs(UnmanagedType.LPWStr)]string friendlyName, 
+            IntPtr callback);
     }
 }

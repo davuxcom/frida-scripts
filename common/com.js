@@ -1,5 +1,7 @@
 "use strict";
 
+// GOAL: Build up an object model around COM interfaces. i.e. implement vtbl and friendly wrappers.
+
 const Struct = require('./struct');
 const GUID = require('./guid');
 const Win32 = require('./win32');

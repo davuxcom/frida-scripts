@@ -1,6 +1,6 @@
 "use strict";
 
-// GOAL: Using the registered COM DotNetBridge.dll, build objects to represent a root namespace and contained types.
+// GOAL: Using the registered COM DotNetBridge.dll, expose an object model for .net objects.
 
 const Win32 = require('./win32');
 const Struct = require('./struct');
@@ -52,20 +52,6 @@ function DotNetBridge() {
         return ret;
     }
     
-    this.SwitchToAppDomain = function(targetDomainName, cb) {
-        var callback = new NativeCallback(function (argsPtr) {
-            console.log("[*] Got updated bridge: " + argsPtr);
-            bridge = new COM.Pointer(IDotNetBridge);
-            bridge.Attach(argsPtr);
-            cb();
-            return NULL;
-        }, 'pointer', ['pointer'], Win32.Abi);
-        
-        // Save a pointer somewhere in javascript, the GC is so quick it'll clean up before we have a chance to call back.
-        _pinnedNativeCallbackObjects.push(callback);
-        DoCall("SwitchToAppDomain", Memory.allocUtf16String(targetDomainName), callback);
-    }
-    
     this.CreateObject = function(typeInfo, args) {
         return typeInfo.IsDelegate ? 
             DoCall("CreateDelegate", Memory.allocUtf16String(typeInfo.TypeName), JsonDelegate(args)) :
@@ -100,7 +86,21 @@ function DotNetBridge() {
             Memory.allocUtf16String(SerializedArgsToJson(args)),
             genericTypes ? Memory.allocUtf16String(JSON.stringify(genericTypes.$Clr_Handle)) : NULL,
             returnBoxed ? 1 : 0);
-    };
+    }
+
+    this.SwitchToAppDomain = function(targetDomainName, cb) {
+        var callback = new NativeCallback(function (argsPtr) {
+            console.log("[*] Got updated bridge: " + argsPtr);
+            bridge = new COM.Pointer(IDotNetBridge);
+            bridge.Attach(argsPtr);
+            cb();
+            return NULL;
+        }, 'pointer', ['pointer'], Win32.Abi);
+        
+        // Save a pointer somewhere in javascript, the GC is so quick it'll clean up before we have a chance to call back.
+        _pinnedNativeCallbackObjects.push(callback);
+        DoCall("SwitchToAppDomain", Memory.allocUtf16String(targetDomainName), callback);
+    }
 }
 
 // Ensure the bridge is a singleton, even if this script is included multiple times.
@@ -294,14 +294,16 @@ function NamespaceWrapper(namespaceName) {
 
 module.exports = {
     Namespace: NamespaceWrapper,
-    SwitchToAppDomain: function(targetDomainName, cb) { BridgeExports.SwitchToAppDomain(targetDomainName, cb); },
+    SwitchToAppDomain: function(targetDomainName, cb) { 
+        BridgeExports.SwitchToAppDomain(targetDomainName, cb); 
+    },
     ListAppDomains: function() {
         var domains = new NamespaceWrapper("DotNetBridge").AppDomainSwitcher.EnumAppDomains();
         var ret = [];
         for (var i = 0; i < domains.Count; i++) ret[ret.length] = domains.get_Item(i).FriendlyName;
         return ret;
     },
-    Prune: function () { // Enable .net GC to clean up objects (remove reference in js and in .net).
+    Prune: function () { // Allow .net GC to clean up objects (remove reference in js and in .net).
         var outstanding = _objects.length;
         for (var i = outstanding - 1; i > -1; --i) BridgeExports.ReleaseObject(_objects[i].$Clr_Handle);
         _objects.length = 0;

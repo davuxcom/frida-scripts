@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -9,11 +10,28 @@ namespace DotNetBridge
     public class BootStrapper
     {
         delegate IntPtr JsonDelegate(IntPtr args);
+        delegate void CreateDelegate(IntPtr args);
 
         public BootStrapper(IntPtr callback)
         {
             var del = (JsonDelegate)Marshal.GetDelegateForFunctionPointer(callback, typeof(JsonDelegate));
             del.Invoke(Marshal.GetComInterfaceForObject<DotNetBridge, IDotNetBridge>(new DotNetBridge()));
+        }
+
+        public static int Boot(string callbackStr)
+        {
+            try
+            {
+                var callback = new IntPtr(Convert.ToInt64(callbackStr, 16));
+                var del = (CreateDelegate)Marshal.GetDelegateForFunctionPointer(callback, typeof(CreateDelegate));
+                del.Invoke(Marshal.GetComInterfaceForObject<DotNetBridge, IDotNetBridge>(new DotNetBridge()));
+                return 1;
+            }
+            catch(Exception ex)
+            {
+                File.WriteAllText("d:\\test11.txt", $"input '{callbackStr}' did {ex}");
+                return -1;
+            }
         }
     }
 
@@ -49,6 +67,7 @@ namespace DotNetBridge
             runtime.IsStarted(out started, out flags);
             if (!started) throw new COMException("CLR not started??");
 
+            
             var V2Host = (ICorRuntimeHost)runtime.GetInterface(ref CLSID_CorRuntimeHost, ref IID_CorRuntimeHost);
             IntPtr hDomainEnum;
             V2Host.EnumDomains(out hDomainEnum);

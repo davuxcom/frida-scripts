@@ -6,6 +6,7 @@ const Win32 = require('./win32');
 const Struct = require('./struct');
 const GUID = require('./guid');
 const COM = require('./com');
+const LocalSettings = require('../local_settings');
 
 function Warn(message) { if ("CLRWarn" in global) console.warn(message); }
 function Log(message) { if ("CLRDebug" in global) console.log(message); }
@@ -22,10 +23,72 @@ var IDotNetBridge = new COM.Interface(COM.IUnknown, {
     SwitchToAppDomain: [6, ['pointer', 'pointer', 'pointer']],
 }, "ea688a1d-4be4-4cae-b2a3-9a389fcd1c8b");
 
+var Kernel32 = {	
+    LoadLibrary: new NativeFunction(Module.findExportByName("kernel32.dll", "LoadLibraryW"), 'pointer', ['pointer'], Win32.Abi),	
+};	
+Kernel32.LoadLibrary(Memory.allocUtf16String("mscoree.dll"));	
+
+var MSCorEE = {	
+    CLRCreateInstance: new NativeFunction(Module.findExportByName("MSCorEE.dll", "CLRCreateInstance"), 'uint', ['pointer', 'pointer', 'pointer'], Win32.Abi),	
+};
+
+var CLSID_CLRMetaHost = GUID.alloc("9280188d-0e8e-4867-b30c-7fa83884e8de");	
+var ICLRMetaHost = new COM.Interface(COM.IUnknown, {	
+    GetRuntime: [0, ['pointer','pointer','pointer']],
+    EnumerateInstalledRuntimes: [2, ['pointer']],	
+}, "D332DB9E-B9B3-4125-8207-A14884F53216");	
+
+var ICLRRuntimeInfo = new COM.Interface(COM.IUnknown, {	
+    GetVersionString: [0, ['pointer', 'pointer']],	
+    GetInterface: [6, ['pointer', 'pointer', 'pointer']],	
+    IsStarted: [11, ['pointer', 'pointer']],
+}, "BD39D1D2-BA2F-486a-89B0-B4B0CB466891");	
+
+var CLSID_CLRRuntimeHost = GUID.alloc("90F1A06E-7712-4762-86B5-7A5EBA6BDB02");	
+var ICLRRuntimeHost = new COM.Interface(COM.IUnknown, {	
+    Start: [0, []],	
+    ExecuteInDefaultAppDomain: [8, ['pointer', 'pointer', 'pointer', 'pointer', 'pointer']],	
+}, "90F1A06C-7712-4762-86B5-7A5EBA6BDB02");	
+
 function DotNetBridge() {
     console.log("[*] Creating DotNetBridge");
-    var bridge = COM.CreateInstance(CLSID_DotNetBridge, COM.ClassContext.InProc, IDotNetBridge);
+    
+    var bridge = new COM.Pointer(IDotNetBridge);
 
+    var metaHost = new COM.Pointer(ICLRMetaHost);
+    COM.ThrowIfFailed(MSCorEE.CLRCreateInstance(CLSID_CLRMetaHost, ICLRMetaHost.IID, metaHost.GetAddressOf()));
+    
+    var runtimeInfo = new COM.Pointer(ICLRRuntimeInfo);
+    COM.ThrowIfFailed(metaHost.GetRuntime(Memory.allocUtf16String("v4.0.30319"), ICLRRuntimeInfo.IID, runtimeInfo.GetAddressOf()));
+    
+    var pbStarted = new Struct({value:'uint'});	
+    var pdwStartupFlags = new Struct({value:'uint'});	
+    COM.ThrowIfFailed(runtimeInfo.IsStarted(pbStarted.Get(), pdwStartupFlags.Get()));
+    
+    var runtimeHost = new COM.Pointer(ICLRRuntimeHost);	
+    COM.ThrowIfFailed(runtimeInfo.GetInterface(CLSID_CLRRuntimeHost, ICLRRuntimeHost.IID, runtimeHost.GetAddressOf()));
+    if (pbStarted.value == 0) {
+        console.log("[*] Starting CLR...");
+        COM.ThrowIfFailed(runtimeHost.Start());
+    }
+    
+    var cb = new NativeCallback(function(bridgePtr) {
+        console.log("[*] Got bridge: " + bridgePtr);
+        bridge.Attach(bridgePtr);
+    }, 'void', ['pointer'], Win32.Abi);
+    
+    var assemblyPath = LocalSettings.ScriptRoot + (Process.pointerSize == 4 ? "x86" : "x64") + "/Debug/DotNetBridge.dll";
+
+    console.log("[*] Starting: " + assemblyPath);
+    var ret = new Struct({ 'value': 'uint' });	
+    COM.ThrowIfFailed(runtimeHost.ExecuteInDefaultAppDomain(
+        Memory.allocUtf16String(assemblyPath),	
+        Memory.allocUtf16String("DotNetBridge.BootStrapper"), 
+        Memory.allocUtf16String("Boot"), 
+        Memory.allocUtf16String("" + cb), 
+        ret.Get()));
+    console.log("[*] Started: " + ret.value);
+    
     function SerializedArgsToJson(params) {
         if (typeof params === 'undefined') { params = []; }
         if (Object.prototype.toString.call(params) === '[object Array]') {
